@@ -1,0 +1,20 @@
+Cargo.lock
+  h_98470968a255e0 1175
+apps/desktop/package.json
+  h_98470968a255e0 3
+apps/desktop/src-tauri/Cargo.toml
+  h_98470968a255e0 3
+apps/desktop/src-tauri/tauri.conf.json
+  h_98470968a255e0 4,36
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "846d1c66e770e8fdd87ba8cc3a131866a40ca901",
+  "prompts": {},
+  "humans": {
+    "h_98470968a255e0": {
+      "author": "诸岳 <fuping.dfp@antgroup.com>"
+    }
+  }
+}
