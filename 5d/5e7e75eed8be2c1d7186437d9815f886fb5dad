@@ -1,0 +1,14 @@
+server/src/api/cursor/bidi.rs
+  h_98470968a255e0 163-168,172
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "5d5e7e75eed8be2c1d7186437d9815f886fb5dad",
+  "prompts": {},
+  "humans": {
+    "h_98470968a255e0": {
+      "author": "诸岳 <fuping.dfp@antgroup.com>"
+    }
+  }
+}
