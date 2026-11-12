@@ -1,0 +1,14 @@
+server/src/cursor/checkpoint/messages/decode.rs
+  h_98470968a255e0 149-152,164-193
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "441bab00fe32dd94e6cc30351fd7cff42502db82",
+  "prompts": {},
+  "humans": {
+    "h_98470968a255e0": {
+      "author": "诸岳 <fuping.dfp@antgroup.com>"
+    }
+  }
+}
