@@ -146,16 +146,10 @@ fn decode_text(value: &Value) -> Result<MessageContent> {
             Some("text") => Ok(ContentPart::Text {
                 text: required_string(part, "text")?.into(),
             }),
-            Some("image") => {
-                let mime_type = required_string(part, "mimeType")?;
-                let encoded = required_string(part, "image")?;
-                Ok(ContentPart::Image {
-                    mime_type: mime_type.into(),
-                    data: STANDARD.decode(encoded).map_err(|error| {
-                        Error::Protocol(format!("invalid Cursor image base64: {error}"))
-                    })?,
-                })
-            }
+            Some("image") => Ok(ContentPart::Image {
+                mime_type: required_string(part, "mimeType")?.into(),
+                data: decode_image_data(part)?,
+            }),
             Some(kind) => Err(Error::Protocol(format!(
                 "unsupported Cursor message content part: {kind}"
             ))),
@@ -165,6 +159,36 @@ fn decode_text(value: &Value) -> Result<MessageContent> {
         })
         .collect::<Result<Vec<_>>>()?;
     Ok(MessageContent::Parts { parts })
+}
+
+/// Cursor 3.29 sends `image` as an object holding the raw bytes
+/// (`{"type":"webp","data":[82,73,70,70,...]}`); older builds send a base64 string.
+fn decode_image_data(part: &Value) -> Result<Vec<u8>> {
+    let image = part
+        .get("image")
+        .ok_or_else(|| Error::Protocol("Cursor message is missing image".into()))?;
+    match image {
+        Value::String(encoded) => STANDARD
+            .decode(encoded)
+            .map_err(|error| Error::Protocol(format!("invalid Cursor image base64: {error}"))),
+        Value::Object(fields) => {
+            let bytes = fields
+                .get("data")
+                .and_then(Value::as_array)
+                .ok_or_else(|| Error::Protocol("Cursor image is missing data".into()))?;
+            bytes
+                .iter()
+                .map(|value| {
+                    value
+                        .as_u64()
+                        .filter(|byte| *byte <= u64::from(u8::MAX))
+                        .map(|byte| byte as u8)
+                        .ok_or_else(|| Error::Protocol("Cursor image byte is out of range".into()))
+                })
+                .collect()
+        }
+        _ => Err(Error::Protocol("Cursor image has unsupported shape".into())),
+    }
 }
 
 fn decode_assistant(value: &Value, internal_id: &str) -> Result<MessageContent> {
