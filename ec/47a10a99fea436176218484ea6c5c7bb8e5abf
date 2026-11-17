@@ -1,0 +1,22 @@
+cursor.md
+  h_f99a5e82bb4645 107,112
+server/src/api/cursor/bidi.rs
+  h_f99a5e82bb4645 8,175
+server/src/cursor/protocol/mod.rs
+  h_f99a5e82bb4645 7
+server/src/cursor/protocol/salvage.rs
+  h_f99a5e82bb4645 1-195
+server/tests/bidi_decode.rs
+  h_f99a5e82bb4645 1-239
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "ec47a10a99fea436176218484ea6c5c7bb8e5abf",
+  "prompts": {},
+  "humans": {
+    "h_f99a5e82bb4645": {
+      "author": "dengfuping <fuping.dfp@antgroup.com>"
+    }
+  }
+}
