@@ -1,0 +1,22 @@
+Cargo.lock
+  h_f99a5e82bb4645 1175
+apps/desktop/package-lock.json
+  h_f99a5e82bb4645 3,9
+apps/desktop/package.json
+  h_f99a5e82bb4645 3
+apps/desktop/src-tauri/Cargo.toml
+  h_f99a5e82bb4645 3
+apps/desktop/src-tauri/tauri.conf.json
+  h_f99a5e82bb4645 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "145b99213f9ce533953d46c063d8d8858f5ad2fc",
+  "prompts": {},
+  "humans": {
+    "h_f99a5e82bb4645": {
+      "author": "dengfuping <fuping.dfp@antgroup.com>"
+    }
+  }
+}
