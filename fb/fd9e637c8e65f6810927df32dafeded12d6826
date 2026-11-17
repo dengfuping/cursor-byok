@@ -1,0 +1,14 @@
+AGENTS.md
+  h_f99a5e82bb4645 11-15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "fbfd9e637c8e65f6810927df32dafeded12d6826",
+  "prompts": {},
+  "humans": {
+    "h_f99a5e82bb4645": {
+      "author": "dengfuping <fuping.dfp@antgroup.com>"
+    }
+  }
+}
