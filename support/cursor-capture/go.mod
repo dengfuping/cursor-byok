@@ -4,7 +4,7 @@ go 1.25.8
 
 require (
 	github.com/andybalholm/brotli v1.2.0
-	github.com/leookun/cursor-byok/cursor-proto v0.0.0
+	github.com/dengfuping/cursor-byok/cursor-proto v0.0.0
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c
 	google.golang.org/protobuf v1.36.11
 	modernc.org/sqlite v1.50.1
@@ -22,4 +22,4 @@ require (
 	modernc.org/memory v1.11.0 // indirect
 )
 
-replace github.com/leookun/cursor-byok/cursor-proto => ../cursor-protocol-extractor
+replace github.com/dengfuping/cursor-byok/cursor-proto => ../cursor-protocol-extractor

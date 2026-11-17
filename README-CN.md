@@ -1,17 +1,15 @@
-## 👋 受够了Cursor的性能？ ✨ **同作者新作** → [Baocode](https://github.com/baocode-dev/baocode) —— 为 Claude Code 打造的精致的桌面 GUI，超小尺寸，超低占用
-
 <div align="center">
 
 # cursor-byok
 
 cursor-byok 是一个运行在本机的 Cursor 模型网关，帮助你在 Cursor 中使用自己配置的模型服务。
 
-[English README](./README.md) · [使用指南](https://docs.leokun.cn) · [下载](https://github.com/leookun/cursor-byok/releases/latest) · [提交问题](https://github.com/leookun/cursor-byok/issues)
+[English README](./README.md) · [下载](https://github.com/dengfuping/cursor-byok/releases/latest) · [提交问题](https://github.com/dengfuping/cursor-byok/issues)
 
-[![Release](https://img.shields.io/github/v/release/leookun/cursor-byok?style=flat-square)](https://github.com/leookun/cursor-byok/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/leookun/cursor-byok/total?style=flat-square)](https://github.com/leookun/cursor-byok/releases)
-[![License](https://img.shields.io/github/license/leookun/cursor-byok?style=flat-square)](./LICENSE)
-[![Platforms](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey?style=flat-square)](https://github.com/leookun/cursor-byok/releases/latest)
+[![Release](https://img.shields.io/github/v/release/dengfuping/cursor-byok?style=flat-square)](https://github.com/dengfuping/cursor-byok/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/dengfuping/cursor-byok/total?style=flat-square)](https://github.com/dengfuping/cursor-byok/releases)
+[![License](https://img.shields.io/github/license/dengfuping/cursor-byok?style=flat-square)](./LICENSE)
+[![Platforms](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey?style=flat-square)](https://github.com/dengfuping/cursor-byok/releases/latest)
 
 </div>
 
@@ -28,6 +26,9 @@ cursor-byok 是一个开源的本地模型网关。它在你的设备上运行�
 > [!IMPORTANT]
 > cursor-byok 免费且开源，但你连接的模型服务商可能会按用量收费。本项目是独立项目，与 Cursor 或其开发者没有关联，也未获得其认可。
 
+> [!NOTE]
+> 本仓库是 [leookun/cursor-byok](https://github.com/leookun/cursor-byok) 的 fork。原仓库已归档，不再提供修复和新版本，后续的版本更新、bugfix 和发布都在本仓库进行。
+
 ## 主要功能
 
 - **自定义模型通道**：配置自己的 API 地址、凭据和模型 ID。
@@ -36,18 +37,16 @@ cursor-byok 是一个开源的本地模型网关。它在你的设备上运行�
 - **连接性能测试**：查看首字延迟、生成速度、总耗时和原始服务商响应。
 - **Agent 工作流**：继续使用工具调用、Skills、MCP 和多轮对话。
 - **会话指标**：查看 Token 用量、缓存命中率、对话轮次和估算价值。
-- **TAB 补全服务**：在公益服务、官方直连和自定义服务之间选择连接方式。
+- **TAB 补全服务**：在官方直连和自定义服务之间选择连接方式。
 - **跨平台运行**：支持 macOS、Windows 和 Linux。
 
 ## 快速开始
 
-1. 从 [GitHub Releases](https://github.com/leookun/cursor-byok/releases/latest) 下载适合你操作系统的最新版本。
+1. 从 [GitHub Releases](https://github.com/dengfuping/cursor-byok/releases/latest) 下载适合你操作系统的最新版本。
 2. 启动 cursor-byok，打开 **Cursor 配置**，按提示初始化本地 CA（证书颁发机构）。
 3. 在模型设置中添加模型，填写服务地址、API Key 和模型名称，然后保存并运行 **测试**。
 4. 确认测试通过后，保持 cursor-byok 运行。
 5. **首次升级 Cursor 或首次配置模型后，完全退出并重新启动 Cursor，然后新开一个对话**。在模型列表中选择已配置的模型，开始使用 Agent。
-
-完整的安装步骤、配置说明和常见问题，请参阅[中文使用指南](https://docs.leokun.cn/zh/docs)。
 
 > [!TIP]
 > 首次升级 Cursor 或首次完成配置后，必须完全退出并重新启动 Cursor，再新开一个对话。配置前已经打开的对话不会加载新连接；使用自定义模型时，请在模型列表中手动选择该模型，不要选择 **Auto**。
@@ -86,9 +85,8 @@ GPT 系列建议使用 **Responses API**。如果使用 Chat Completions，可�
 
 Cursor 的 Tab 补全由独立的 TAB 服务处理，不经过模型通道。你可以在 **系统设置 → TAB 设置** 中选择以下模式：
 
-- **使用公益服务（默认）**：使用项目作者部署的公共服务，无需额外配置。
-- **直连**：直接连接当前 Cursor 账号对应的官方 TAB 服务，适合账号拥有官方额度的情况。
-- **自定义**：自行部署 [`cursor-tab-server`](https://github.com/leookun/cursor-byok/tree/archive/v0.0.49/cursor-tab-server)，然后填写 TAB 服务地址。
+- **直连（默认）**：直接连接当前 Cursor 账号对应的官方 TAB 服务，适合账号拥有官方额度的情况。
+- **自定义**：自行部署 [`cursor-tab-server`](https://github.com/dengfuping/cursor-byok/tree/archive/v0.0.49/cursor-tab-server)，然后填写 TAB 服务地址。该服务使用你自己的 Cursor 账号 token 转发 TAB 请求，不复用任何第三方公共服务。
 
 修改 TAB 设置后，建议重启 Cursor 并新开一个对话，确保新的连接方式生效。
 
@@ -125,7 +123,7 @@ cursor-byok/
 │   ├── desktop/
 │   │   ├── src/
 │   │   │   ├── features/ # 首页、模型、调用记录与设置
-│   │   │   ├── shell/    # 窗口框架、页面布局与广告外壳
+│   │   │   ├── shell/    # 窗口框架与页面布局
 │   │   │   ├── shared/   # UI、虚拟列表、状态、API 与平台能力
 │   │   │   ├── i18n/     # 本地化运行时与语言目录
 │   │   │   └── styles/   # 全局主题与排版令牌
@@ -205,20 +203,17 @@ make build-docker    # 构建 Docker 镜像
 
 项目将继续改进模型兼容性、Agent 工具、本地运行稳定性和自托管体验，并探索支持更多 IDE、聊天和 Agent 工作流。
 
-计划与进展请参阅[发布路线图](https://github.com/leookun/cursor-byok/discussions/32)。
+计划与进展请参阅 [Issues](https://github.com/dengfuping/cursor-byok/issues)。
 
 ## 社区与反馈
 
-- [中文使用指南](https://docs.leokun.cn/zh/docs)
-- [GitHub Issues](https://github.com/leookun/cursor-byok/issues)
-- [Telegram 社区](https://t.me/cursor_byok)
-- QQ 群：`1095916242`、`1094411438`、`1095918002`、`1094419321`
+- [GitHub Issues](https://github.com/dengfuping/cursor-byok/issues)
 
 提交问题时，请附上操作系统、cursor-byok 版本、模型类型、请求协议、已脱敏的服务地址、错误信息和复现步骤。请勿公开 API Key 或其他凭据。
 
 ## 参与贡献
 
-欢迎提交 Issue 和 Pull Request。提交代码前请先阅读项目中的开发说明，并运行 `make check` 确认格式、测试和前端构建检查通过。
+欢迎提交 Issue 和 Pull Request。提交代码前请先阅读 [AGENTS.md](./AGENTS.md) 中的架构与沟通约定，并运行 `make check` 确认格式、测试和前端构建检查通过。
 
 ## 许可证
 
