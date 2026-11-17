@@ -104,11 +104,12 @@ server/
 │   │   │           ├── output.rs                # ≈500 行；输出处理
 │   │   │           └── render.rs                # ≈240 行；结果渲染
 │   │   │
-│   │   ├── protocol/                           # ≈600 行；非 Tool Wire Protocol
+│   │   ├── protocol/                           # ≈800 行；非 Tool Wire Protocol
 │   │   │   ├── mod.rs                          # ≈20 行；模块导出
 │   │   │   ├── proto.rs                        # ≈80 行；protobuf 类型
 │   │   │   ├── connect.rs                      # ≈150 行；Connect framing
 │   │   │   ├── json_stream.rs                  # ≈280 行；JSON 流
+│   │   │   ├── salvage.rs                      # 195 行；丢弃不可解码的 ConversationState 字段
 │   │   │   └── events.rs                       # ≈300 行；实时下行消息
 │   │   │
 │   │   ├── prompting/                          # ≈650 行；Prompt 编译

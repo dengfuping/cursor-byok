@@ -1,12 +1,11 @@
 //! Accepts ordered Cursor Bidi append requests and routes them by request_id.
-use prost::Message;
-
 use crate::{
     cursor::{
         conversation::TransportCommand,
         protocol::{
             events,
             proto::{agent::v1 as agent, aiserver::v1 as ai},
+            salvage,
         },
         transport::{TransportParent, TransportRegistry},
     },
@@ -173,7 +172,7 @@ pub fn decode(request: &ai::BidiAppendRequest) -> Result<DecodedAppend> {
     Ok(DecodedAppend {
         request_id: request_id.into(),
         seqno: request.append_seqno,
-        message: agent::AgentClientMessage::decode(payload.as_slice())?,
+        message: salvage::decode(&payload)?,
     })
 }
 

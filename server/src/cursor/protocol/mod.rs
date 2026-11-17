@@ -4,3 +4,4 @@ pub mod connect;
 pub mod events;
 pub mod json_stream;
 pub mod proto;
+pub mod salvage;
