@@ -1,0 +1,60 @@
+.agents/skills/release/SKILL.md
+  h_f99a5e82bb4645 12-13
+README-CN.md
+  h_f99a5e82bb4645 7,9-12,29-31,40,45,88-89,126,206,210,216
+README.md
+  h_f99a5e82bb4645 5,7,9-12,29-31,44,47,55-63,92,96,100-101
+apps/desktop/src-tauri/src/update/mod.rs
+  h_f99a5e82bb4645 27
+apps/desktop/src-tauri/tauri.conf.json
+  h_f99a5e82bb4645 38
+apps/desktop/src/demo/api.ts
+  h_f99a5e82bb4645 98
+apps/desktop/src/features/settings/SettingsPage.tsx
+  h_f99a5e82bb4645 40
+apps/desktop/src/features/settings/TabSettingsCard.tsx
+  h_f99a5e82bb4645 70
+apps/desktop/src/i18n/generated/catalog.json
+  h_f99a5e82bb4645 139,1153,1628,1882,2047,2052,2107,2119,2266,2271,2276,2572,2723,2911,3089,3334,3399,3437,3492,3552,3557,3562,3940,4259,4264,4295,4300,5167,5331,5496,5934,6257
+apps/desktop/src/shared/api.ts
+  h_f99a5e82bb4645 145
+apps/desktop/src/shell/AppLayout.tsx
+  h_f99a5e82bb4645 1,11,45
+protocols/cursor/agent_v1.proto
+  h_f99a5e82bb4645 8
+protocols/cursor/aiserver_v1.proto
+  h_f99a5e82bb4645 10
+protocols/cursor/anyrun_v1.proto
+  h_f99a5e82bb4645 7
+protocols/cursor/git_forge_v1.proto
+  h_f99a5e82bb4645 5
+protocols/cursor/internapi_v1.proto
+  h_f99a5e82bb4645 5
+protocols/cursor/origin_v1.proto
+  h_f99a5e82bb4645 8
+server/src/store/settings.rs
+  h_f99a5e82bb4645 345-349
+support/cursor-capture/decode.go
+  h_f99a5e82bb4645 14-15
+support/cursor-capture/decode_stored.go
+  h_f99a5e82bb4645 18-19
+support/cursor-capture/go.mod
+  h_f99a5e82bb4645 7,25
+support/cursor-protocol-extractor/extractor/renderer.go
+  h_f99a5e82bb4645 38
+support/cursor-protocol-extractor/go.mod
+  h_f99a5e82bb4645 1
+support/cursor-protocol-extractor/scripts/generate.sh
+  h_f99a5e82bb4645 9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "03f376f1e9e084c4b2215c2512834c9faa54ef2f",
+  "prompts": {},
+  "humans": {
+    "h_f99a5e82bb4645": {
+      "author": "dengfuping <fuping.dfp@antgroup.com>"
+    }
+  }
+}
