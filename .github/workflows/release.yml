@@ -208,6 +208,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Tags feed the previous-release lookup for the generated notes.
+          fetch-depth: 0
 
       - uses: actions/download-artifact@v4
         with:
@@ -276,8 +279,20 @@ jobs:
           VERSION: ${{ needs.prepare.outputs.version }}
         run: gh release upload "v${VERSION}" legacy-update/* --clobber
 
+      - name: Generate release notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          previous=$(git describe --tags --abbrev=0 --exclude "v${VERSION}" "v${VERSION}")
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
+            -f tag_name="v${VERSION}" \
+            -f previous_tag_name="${previous}" \
+            --jq .body > release-notes.md
+          test -s release-notes.md
+
       - name: Publish the completed release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ needs.prepare.outputs.version }}
-        run: gh release edit "v${VERSION}" --draft=false --latest
+        run: gh release edit "v${VERSION}" --notes-file release-notes.md --draft=false --latest
