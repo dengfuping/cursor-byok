@@ -146,11 +146,21 @@ fn overlong_state_payload(extra: usize) -> Vec<u8> {
 /// carries wire type 6, so decoding fails while merging `conversation_state` and
 /// the report names no state field — the shape reported after v1.0.5 shipped.
 fn invalid_wire_type_payload() -> Vec<u8> {
+    misaligned_state_payload(&[0x0e, 0x00, 0x00, 0x00], 6, b"summary-bytes")
+}
+
+/// The same misalignment landing on a named field: a key for tag 7 (`plan`) with
+/// wire type 1, reported as `ConversationStateStructure.plan: invalid wire type:
+/// SixtyFourBit (expected LengthDelimited)`.
+fn misaligned_plan_payload() -> Vec<u8> {
+    misaligned_state_payload(&[0x39, 0, 0, 0, 0, 0, 0, 0, 0], 18, b"src/a.ts")
+}
+
+fn misaligned_state_payload(junk: &[u8], tag: u32, trailing: &[u8]) -> Vec<u8> {
     let mut state = Vec::new();
     push_len_delimited(&mut state, 8, b"turn-1");
-    state.push(0x0e); // tag 1, wire type 6 (invalid)
-    state.extend_from_slice(&[0x00, 0x00, 0x00]);
-    push_len_delimited(&mut state, 6, b"summary-bytes");
+    state.extend_from_slice(junk);
+    push_len_delimited(&mut state, tag, trailing);
 
     let action = pb::ConversationAction {
         action: Some(pb::conversation_action::Action::UserMessageAction(
@@ -249,6 +259,28 @@ fn append_survives_corruption_in_the_middle_of_the_state() {
         state.summary, None,
         "fields after the damage are unreadable and must be dropped"
     );
+}
+
+#[test]
+fn append_survives_a_misaligned_plan_key_inside_the_state() {
+    let payload = misaligned_plan_payload();
+    let error = pb::AgentClientMessage::decode(payload.as_slice())
+        .expect_err("the fixture must reproduce the reported failure");
+    assert_eq!(
+        error.to_string(),
+        "failed to decode Protobuf message: ConversationStateStructure.plan: \
+         AgentRunRequest.conversation_state: AgentClientMessage.message: \
+         invalid wire type: SixtyFourBit (expected LengthDelimited)"
+    );
+
+    let decoded = bidi::decode(&append_request(payload)).expect("the append must be recovered");
+    let Some(pb::agent_client_message::Message::RunRequest(run)) = decoded.message.message else {
+        panic!("expected a run request");
+    };
+    assert!(run.action.is_some(), "the action must survive");
+    let state = run.conversation_state.expect("the state must be kept");
+    assert_eq!(state.turns, vec![b"turn-1".to_vec()]);
+    assert_eq!(state.plan, None, "the misaligned tail is unreadable");
 }
 
 #[test]
