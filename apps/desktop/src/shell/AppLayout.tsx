@@ -8,8 +8,10 @@ import { Card } from "../shared/ui/Card";
 import controls from "../shared/ui/Controls.module.scss";
 import { Icon } from "../shared/ui/Icon";
 import { TooltipTrigger } from "../shared/ui/TooltipTrigger";
-import { flatColorAreaChartIcon, flatColorCrystalOscillatorIcon, flatColorSalesPerformanceIcon, flatColorSettingsIcon, refreshIcon } from "../shared/ui/icons";
+import { useMessage } from "../shared/ui/message";
+import { flatColorAboutIcon, flatColorAreaChartIcon, flatColorCrystalOscillatorIcon, flatColorSalesPerformanceIcon, flatColorSettingsIcon, refreshIcon } from "../shared/ui/icons";
 import { VirtualList } from "../shared/virtual/VirtualList";
+import { api } from "../shared/api";
 import { appStore, useAppStore } from "../shared/store/appStore";
 import { useUpdateStore } from "../shared/store/updateStore";
 import styles from "./AppLayout.module.scss";
@@ -17,13 +19,16 @@ import { PageActionsTarget } from "./PageActions";
 
 type MenuItem =
   | { kind: "page"; path: string; label: string; icon: IconifyIcon | string }
+  | { kind: "external"; label: string; icon: IconifyIcon | string; url: string }
   | { kind: "group"; label: string };
 
 const keptAlivePages = ["/", "/calls", "/settings", "/harness/cursor", "/plugins"];
+const docsUrl = "https://dengfuping.github.io/cursor-byok/";
 
 export function AppLayout() {
   const { busy, cursorHarness } = useAppStore();
   const { availableVersion } = useUpdateStore();
+  const message = useMessage();
   const location = useLocation();
   const [leftActionTarget, setLeftActionTarget] = useState<HTMLDivElement | null>(null);
   const [rightActionTarget, setRightActionTarget] = useState<HTMLDivElement | null>(null);
@@ -35,6 +40,7 @@ export function AppLayout() {
     { kind: "group", label: t("设置") },
     { kind: "page", path: "/plugins", label: t("插件配置"), icon: flatColorCrystalOscillatorIcon },
     { kind: "page", path: "/settings", label: t("系统设置"), icon: flatColorSettingsIcon },
+    { kind: "external", label: t("使用教程"), icon: flatColorAboutIcon, url: docsUrl },
   ];
 
   return <PageLayout className={styles.root}>
@@ -42,13 +48,26 @@ export function AppLayout() {
       <nav className={styles.navigation} aria-label={t("主菜单")}>
         <VirtualList
           items={menuItems}
-          itemKey={(item) => item.kind === "group" ? `group-${item.label}` : item.path}
+          itemKey={(item) => item.kind === "group" ? `group-${item.label}` : item.kind === "external" ? `external-${item.label}` : item.path}
           estimatedItemHeight={36}
           itemGap={3}
           className={`${styles.navigationList} scroll-shadow-bottom`}
         >
           {(item) => item.kind === "group"
           ? <div className={styles.navigationGroup} key={`group-${item.label}`}>{item.label}</div>
+          : item.kind === "external"
+          ? <div className={styles.navigationRow} key={item.url}>
+            <button
+              type="button"
+              onClick={() => void api.openExternalUrl(item.url)
+                .catch((cause) => message(cause instanceof Error ? cause.message : String(cause)))}
+            >
+              {typeof item.icon === "string"
+                ? <Icon src={item.icon} size="1.3em" />
+                : <Icon icon={item.icon} size="1.3em" />}
+              <span>{item.label}</span>
+            </button>
+          </div>
           : <div className={styles.navigationRow} key={item.path}>
             <NavLink to={item.path} end={item.path === "/"}>
               {typeof item.icon === "string"

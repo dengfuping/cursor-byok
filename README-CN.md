@@ -4,7 +4,7 @@
 
 cursor-byok 是一个运行在本机的 Cursor 模型网关，帮助你在 Cursor 中使用自己配置的模型服务。
 
-[English README](./README.md) · [下载](https://github.com/dengfuping/cursor-byok/releases/latest) · [提交问题](https://github.com/dengfuping/cursor-byok/issues)
+[English README](./README.md) · [使用文档](https://dengfuping.github.io/cursor-byok/) · [下载](https://github.com/dengfuping/cursor-byok/releases/latest) · [提交问题](https://github.com/dengfuping/cursor-byok/issues)
 
 [![Release](https://img.shields.io/github/v/release/dengfuping/cursor-byok?style=flat-square)](https://github.com/dengfuping/cursor-byok/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/dengfuping/cursor-byok/total?style=flat-square)](https://github.com/dengfuping/cursor-byok/releases)
@@ -50,6 +50,10 @@ cursor-byok 是一个开源的本地模型网关。它在你的设备上运行�
 
 > [!TIP]
 > 首次升级 Cursor 或首次完成配置后，必须完全退出并重新启动 Cursor，再新开一个对话。配置前已经打开的对话不会加载新连接；使用自定义模型时，请在模型列表中手动选择该模型，不要选择 **Auto**。
+
+## 使用文档
+
+安装、模型通道、TAB、系统设置和报错排查都写在 **https://dengfuping.github.io/cursor-byok/**，源码在 [`docs/`](./docs)，与客户端一起发版。
 
 ## 模型配置
 

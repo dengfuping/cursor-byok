@@ -4,7 +4,7 @@
 
 cursor-byok is a local implementation of Cursor's backend.
 
-[Download](https://github.com/dengfuping/cursor-byok/releases/latest) · [Report an Issue](https://github.com/dengfuping/cursor-byok/issues) · [中文版本说明](./README-CN.md)
+[Documentation](https://dengfuping.github.io/cursor-byok/) · [Download](https://github.com/dengfuping/cursor-byok/releases/latest) · [Report an Issue](https://github.com/dengfuping/cursor-byok/issues) · [中文版本说明](./README-CN.md)
 
 [![Release](https://img.shields.io/github/v/release/dengfuping/cursor-byok?style=flat-square)](https://github.com/dengfuping/cursor-byok/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/dengfuping/cursor-byok/total?style=flat-square)](https://github.com/dengfuping/cursor-byok/releases)
@@ -45,6 +45,10 @@ You can connect OpenAI- and Anthropic-compatible services, customize endpoints, 
 2. Launch cursor-byok, open **Model Settings**, and enter the endpoint, API key, and model ID.
 3. Test the model configuration. Once it passes, return to the dashboard and start the service.
 4. After upgrading Cursor or configuring a model for the first time, quit Cursor completely and restart it, then start a new conversation and select the configured model.
+
+## Documentation
+
+Installation, model channels, TAB, settings and troubleshooting are documented at **https://dengfuping.github.io/cursor-byok/**. The sources live in [`docs/`](./docs) and ship with the same release as the app.
 
 ## Model Management
 
