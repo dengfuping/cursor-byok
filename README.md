@@ -4,7 +4,7 @@
 
 cursor-byok is a local implementation of Cursor's backend.
 
-[Documentation](https://dengfuping.github.io/cursor-byok/) · [Download](https://github.com/dengfuping/cursor-byok/releases/latest) · [Report an Issue](https://github.com/dengfuping/cursor-byok/issues) · [中文版本说明](./README-CN.md)
+[Documentation](https://dengfuping.github.io/cursor-byok/en/) · [Download](https://github.com/dengfuping/cursor-byok/releases/latest) · [Report an Issue](https://github.com/dengfuping/cursor-byok/issues) · [中文版本说明](./README-CN.md)
 
 [![Release](https://img.shields.io/github/v/release/dengfuping/cursor-byok?style=flat-square)](https://github.com/dengfuping/cursor-byok/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/dengfuping/cursor-byok/total?style=flat-square)](https://github.com/dengfuping/cursor-byok/releases)
@@ -48,7 +48,7 @@ You can connect OpenAI- and Anthropic-compatible services, customize endpoints, 
 
 ## Documentation
 
-Installation, model channels, TAB, settings and troubleshooting are documented at **https://dengfuping.github.io/cursor-byok/**. The sources live in [`docs/`](./docs) and ship with the same release as the app.
+Installation, model channels, TAB, settings and troubleshooting are documented at **https://dengfuping.github.io/cursor-byok/en/** (中文: [dengfuping.github.io/cursor-byok](https://dengfuping.github.io/cursor-byok/)). The sources live in [`docs/`](./docs) and ship with the same release as the app.
 
 ## Model Management
 
