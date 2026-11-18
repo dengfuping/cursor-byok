@@ -60,9 +60,7 @@ export default defineConfig({
   description: "在 Cursor 中使用你自己配置的模型服务",
   base: "/cursor-byok/",
   cleanUrls: true,
-  appearance: "dark",
   lastUpdated: true,
-  head: [["meta", { name: "theme-color", content: "#0b0c0e" }]],
   themeConfig: {
     logo: undefined,
     socialLinks: [{ icon: "github", link: repository }],
