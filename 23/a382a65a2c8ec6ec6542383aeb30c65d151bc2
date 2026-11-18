@@ -1,0 +1,40 @@
+README-CN.md
+  h_f99a5e82bb4645 56
+README.md
+  h_f99a5e82bb4645 7,51
+apps/desktop/src/shell/AppLayout.tsx
+  h_f99a5e82bb4645 14,27,33,35
+docs/.vitepress/config.mts
+  h_f99a5e82bb4645 5-57,63,65,67-104,107-126
+docs/.vitepress/theme/custom.css
+  h_f99a5e82bb4645 1-246
+docs/.vitepress/theme/index.ts
+  h_f99a5e82bb4645 1-4
+docs/en/faq.md
+  h_f99a5e82bb4645 1-50
+docs/en/index.md
+  h_f99a5e82bb4645 1-38
+docs/en/install.md
+  h_f99a5e82bb4645 1-83
+docs/en/models.md
+  h_f99a5e82bb4645 1-48
+docs/en/settings.md
+  h_f99a5e82bb4645 1-65
+docs/en/tab.md
+  h_f99a5e82bb4645 1-43
+docs/en/troubleshooting.md
+  h_f99a5e82bb4645 1-56
+docs/troubleshooting.md
+  h_f99a5e82bb4645 7-11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "23a382a65a2c8ec6ec6542383aeb30c65d151bc2",
+  "prompts": {},
+  "humans": {
+    "h_f99a5e82bb4645": {
+      "author": "dengfuping <fuping.dfp@antgroup.com>"
+    }
+  }
+}
