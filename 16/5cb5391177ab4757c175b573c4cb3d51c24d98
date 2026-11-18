@@ -1,0 +1,18 @@
+server/src/api/cursor/bidi.rs
+  h_f99a5e82bb4645 156-157,161,165-174,178,188-209
+server/src/api/cursor/handlers.rs
+  h_f99a5e82bb4645 235-241
+server/tests/bidi_decode.rs
+  h_f99a5e82bb4645 145-176,254-277
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "165cb5391177ab4757c175b573c4cb3d51c24d98",
+  "prompts": {},
+  "humans": {
+    "h_f99a5e82bb4645": {
+      "author": "dengfuping <fuping.dfp@antgroup.com>"
+    }
+  }
+}
