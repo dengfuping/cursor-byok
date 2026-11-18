@@ -1,0 +1,50 @@
+.github/workflows/pages.yml
+  h_f99a5e82bb4645 1-57
+.gitignore
+  h_f99a5e82bb4645 36-37
+README-CN.md
+  h_f99a5e82bb4645 7,54-57
+README.md
+  h_f99a5e82bb4645 7,49-52
+apps/desktop/src/i18n/generated/catalog.json
+  h_f99a5e82bb4645 2107,2723,3334,3437,3492,4259,4264,5167,5331,5496,5934,6213-6224
+apps/desktop/src/i18n/locales/en-US.json
+  h_f99a5e82bb4645 436
+apps/desktop/src/i18n/locales/pt-BR.json
+  h_f99a5e82bb4645 436
+apps/desktop/src/i18n/locales/zh-CN.json
+  h_f99a5e82bb4645 436
+apps/desktop/src/shell/AppLayout.tsx
+  h_f99a5e82bb4645 11-12,14,22,26,31,43,51,58-70
+docs/.vitepress/config.mts
+  h_f99a5e82bb4645 1-56
+docs/faq.md
+  h_f99a5e82bb4645 1-50
+docs/index.md
+  h_f99a5e82bb4645 1-38
+docs/install.md
+  h_f99a5e82bb4645 1-83
+docs/models.md
+  h_f99a5e82bb4645 1-48
+docs/package-lock.json
+  h_f99a5e82bb4645 1-2516
+docs/package.json
+  h_f99a5e82bb4645 1-13
+docs/settings.md
+  h_f99a5e82bb4645 1-65
+docs/tab.md
+  h_f99a5e82bb4645 1-43
+docs/troubleshooting.md
+  h_f99a5e82bb4645 1-56
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "52254aebc9f763fb77249f548ba162c692b096a1",
+  "prompts": {},
+  "humans": {
+    "h_f99a5e82bb4645": {
+      "author": "dengfuping <fuping.dfp@antgroup.com>"
+    }
+  }
+}
