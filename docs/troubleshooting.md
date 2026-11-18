@@ -4,11 +4,11 @@
 
 ## 已知问题与修复版本
 
-| 症状 | 根因 | 修复版本 |
-| --- | --- | --- |
-| 会话几秒内断开，Cursor 一直「reconnecting」，日志出现 `BidiAppend data_binary is not part of the captured protocol`、`400 Bad Request` | Cursor 3.29.x 的 `BidiAppend` 新增了 `data_binary` 字段 | **1.0.2**（[PR #1](https://github.com/dengfuping/cursor-byok/pull/1)） |
-| 带图片的对话发不出去，报 `failed to prepare Cursor Run` / `[invalid_argument] Cursor message is missing image` | 图片 part 变成了对象形状，解码只认字符串 | **1.0.3**（[PR #2](https://github.com/dengfuping/cursor-byok/pull/2)） |
-| 某个对话每一轮都失败，报 `ConversationStateStructure.file_states: delimited length exceeded` | 检查点里的 `file_states` 长度字段与实际内容不一致 | **1.0.4**（[PR #3](https://github.com/dengfuping/cursor-byok/pull/3)，[issue #4](https://github.com/dengfuping/cursor-byok/issues/4)） |
+| 症状 | 原因与修复版本 |
+| --- | --- |
+| 会话几秒内断开，Cursor 一直「reconnecting」，日志出现 `BidiAppend data_binary is not part of the captured protocol`、`400 Bad Request` | Cursor 3.29.x 的 `BidiAppend` 新增了 `data_binary` 字段 → **1.0.2**（[PR #1](https://github.com/dengfuping/cursor-byok/pull/1)） |
+| 带图片的对话发不出去，报 `failed to prepare Cursor Run` / `[invalid_argument] Cursor message is missing image` | 图片 part 变成了对象形状，解码只认字符串 → **1.0.3**（[PR #2](https://github.com/dengfuping/cursor-byok/pull/2)） |
+| 某个对话每一轮都失败，报 `ConversationStateStructure.file_states: delimited length exceeded` | 检查点里的 `file_states` 长度字段与实际内容不一致 → **1.0.4**（[PR #3](https://github.com/dengfuping/cursor-byok/pull/3)，[issue #4](https://github.com/dengfuping/cursor-byok/issues/4)） |
 
 升级方式见[下载与安装](./install.md#从旧版本升级)。注意 1.0.3 及更早版本不会自动收到 1.0.4。
 

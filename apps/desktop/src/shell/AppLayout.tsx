@@ -11,6 +11,7 @@ import { TooltipTrigger } from "../shared/ui/TooltipTrigger";
 import { useMessage } from "../shared/ui/message";
 import { flatColorAboutIcon, flatColorAreaChartIcon, flatColorCrystalOscillatorIcon, flatColorSalesPerformanceIcon, flatColorSettingsIcon, refreshIcon } from "../shared/ui/icons";
 import { VirtualList } from "../shared/virtual/VirtualList";
+import { useI18n } from "../i18n/store";
 import { api } from "../shared/api";
 import { appStore, useAppStore } from "../shared/store/appStore";
 import { useUpdateStore } from "../shared/store/updateStore";
@@ -23,13 +24,15 @@ type MenuItem =
   | { kind: "group"; label: string };
 
 const keptAlivePages = ["/", "/calls", "/settings", "/harness/cursor", "/plugins"];
-const docsUrl = "https://dengfuping.github.io/cursor-byok/";
+const docsBaseUrl = "https://dengfuping.github.io/cursor-byok";
 
 export function AppLayout() {
   const { busy, cursorHarness } = useAppStore();
   const { availableVersion } = useUpdateStore();
   const message = useMessage();
+  const { locale } = useI18n();
   const location = useLocation();
+  const docsUrl = locale === "zh-CN" ? `${docsBaseUrl}/` : `${docsBaseUrl}/en/`;
   const [leftActionTarget, setLeftActionTarget] = useState<HTMLDivElement | null>(null);
   const [rightActionTarget, setRightActionTarget] = useState<HTMLDivElement | null>(null);
   const menuItems: MenuItem[] = [

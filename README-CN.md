@@ -53,7 +53,7 @@ cursor-byok 是一个开源的本地模型网关。它在你的设备上运行�
 
 ## 使用文档
 
-安装、模型通道、TAB、系统设置和报错排查都写在 **https://dengfuping.github.io/cursor-byok/**，源码在 [`docs/`](./docs)，与客户端一起发版。
+安装、模型通道、TAB、系统设置和报错排查都写在 **https://dengfuping.github.io/cursor-byok/**（English: [dengfuping.github.io/cursor-byok/en](https://dengfuping.github.io/cursor-byok/en/)），源码在 [`docs/`](./docs)，与客户端一起发版。
 
 ## 模型配置
 
