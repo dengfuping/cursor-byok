@@ -109,7 +109,7 @@ server/
 │   │   │   ├── proto.rs                        # ≈80 行；protobuf 类型
 │   │   │   ├── connect.rs                      # ≈150 行；Connect framing
 │   │   │   ├── json_stream.rs                  # ≈280 行；JSON 流
-│   │   │   ├── salvage.rs                      # 195 行；丢弃不可解码的 ConversationState 字段
+│   │   │   ├── salvage.rs                      # 367 行；修复不可解码的 ConversationState（丢字段 / 重同步边界）
 │   │   │   └── events.rs                       # ≈300 行；实时下行消息
 │   │   │
 │   │   ├── prompting/                          # ≈650 行；Prompt 编译
