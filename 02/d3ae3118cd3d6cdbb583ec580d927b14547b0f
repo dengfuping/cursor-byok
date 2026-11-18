@@ -1,0 +1,16 @@
+.agents/skills/release/SKILL.md
+  h_f99a5e82bb4645 68-105
+.github/workflows/release.yml
+  h_f99a5e82bb4645 211-213,282-293,298
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "02d3ae3118cd3d6cdbb583ec580d927b14547b0f",
+  "prompts": {},
+  "humans": {
+    "h_f99a5e82bb4645": {
+      "author": "dengfuping <fuping.dfp@antgroup.com>"
+    }
+  }
+}
