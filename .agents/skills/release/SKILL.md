@@ -65,6 +65,44 @@ The two listed Proto files are required build inputs and must be committed. Keep
 7. Validate the workflow YAML and inspect the staged diff. Ensure `.tauri/`, unrelated local files, and unrelated user changes are not staged.
 8. Use the `tauri-action@v1` input `uploadUpdaterJson: true`; `includeUpdaterJson` is not a valid v1 input.
 
+## Release notes
+
+Every release body has the same shape. `finalize` fills it with GitHub's generated notes, which already list each merged PR and the compare range; replace that body with this format before reporting the release as done:
+
+```markdown
+<one to three sentences: what this release is and why it matters>
+
+## What's Changed
+
+### Features
+
+### Fixes
+
+### Changed
+
+### Documentation
+
+### Maintenance
+
+## Install
+
+| Platform | Assets |
+| --- | --- |
+| macOS (Apple Silicon) | `Cursor.BYOK_<version>_aarch64.app.tar.gz` |
+| macOS (Intel) | `Cursor.BYOK_<version>_x64.app.tar.gz` |
+| Windows | `Cursor.BYOK_<version>_x64-setup.exe` · portable `cursor-byok-<version>-windows-amd64.zip` |
+| Linux | `Cursor.BYOK_<version>_amd64.AppImage` · `.deb` · `.rpm` |
+
+macOS builds are ad-hoc signed, so the first launch needs the usual Gatekeeper confirmation.
+
+**Full Changelog**: https://github.com/dengfuping/cursor-byok/compare/<previous-tag>...<tag>
+```
+
+- Cover **every PR merged since the previous tag** plus any direct commit that changed behavior. A body that only describes one PR is incomplete.
+- End each entry with its source: `([#12](https://github.com/dengfuping/cursor-byok/pull/12))`, `(fixes [#7](https://github.com/dengfuping/cursor-byok/issues/7))`, or `([abc1234](https://github.com/dengfuping/cursor-byok/commit/abc1234))` when the change never had a PR.
+- Keep only sections that have entries, and keep the Install table's asset names identical to the uploaded assets.
+- Fixing the notes of an already published release is allowed and expected; recreating the tag or Release is not.
+
 ## Publish and verify
 
 After the author explicitly authorizes publication:
