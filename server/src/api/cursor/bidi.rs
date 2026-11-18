@@ -153,43 +153,29 @@ fn history_image_count(history: &agent::ConversationHistory) -> usize {
 }
 
 pub fn decode(request: &ai::BidiAppendRequest) -> Result<DecodedAppend> {
-    let request_id = request
-        .request_id
-        .as_ref()
-        .map(|id| id.request_id.as_str())
-        .filter(|id| !id.is_empty())
-        .ok_or_else(|| Error::Protocol("BidiAppend request_id is required".into()))?;
-    let payload = if !request.data.is_empty() {
-        hex::decode(&request.data)
-            .map_err(|error| Error::Protocol(format!("invalid BidiAppend hex: {error}")))?
-    } else if !request.data_binary.is_empty() {
-        request.data_binary.clone()
-    } else {
-        return Err(Error::Protocol(
-            "BidiAppend contains no AgentClientMessage".into(),
-        ));
-    };
-    let message = match salvage::decode(&payload) {
-        Ok(message) => message,
-        Err(error) => {
-            reject(request_id, &payload, &error);
-            return Err(error);
-        }
-    };
+    let request_id = request_id(request)?;
+    let payload = payload(request)?;
     Ok(DecodedAppend {
         request_id: request_id.into(),
         seqno: request.append_seqno,
-        message,
+        message: salvage::decode(&payload)?,
     })
 }
 
-/// Keeps the exact bytes of an append that could not be decoded, so the next
-/// report of a corrupt state can be diagnosed instead of guessed at.
-fn reject(request_id: &str, payload: &[u8], error: &Error) {
+/// Keeps the bytes of an append that could not be decoded, so the next report of
+/// a corrupt state can be diagnosed from data instead of inference.
+///
+/// Called by the HTTP handler rather than by `decode`, so embedding the ingest
+/// path in a test never writes into the user's data directory.
+pub fn report_rejection(request: &ai::BidiAppendRequest, error: &Error) {
+    let Ok(payload) = payload(request) else {
+        return;
+    };
+    let request_id = request_id(request).unwrap_or_default();
     let dump = crate::config::managed_data_dir()
         .ok()
         .map(|directory| directory.join("rejected"))
-        .and_then(|directory| salvage::dump_rejected(&directory, request_id, payload));
+        .and_then(|directory| salvage::dump_rejected(&directory, request_id, &payload));
     tracing::warn!(
         request_id,
         bytes = payload.len(),
@@ -197,6 +183,28 @@ fn reject(request_id: &str, payload: &[u8], error: &Error) {
         %error,
         "rejected a Cursor append that could not be decoded"
     );
+}
+
+fn request_id(request: &ai::BidiAppendRequest) -> Result<&str> {
+    request
+        .request_id
+        .as_ref()
+        .map(|id| id.request_id.as_str())
+        .filter(|id| !id.is_empty())
+        .ok_or_else(|| Error::Protocol("BidiAppend request_id is required".into()))
+}
+
+fn payload(request: &ai::BidiAppendRequest) -> Result<Vec<u8>> {
+    if !request.data.is_empty() {
+        return hex::decode(&request.data)
+            .map_err(|error| Error::Protocol(format!("invalid BidiAppend hex: {error}")));
+    }
+    if !request.data_binary.is_empty() {
+        return Ok(request.data_binary.clone());
+    }
+    Err(Error::Protocol(
+        "BidiAppend contains no AgentClientMessage".into(),
+    ))
 }
 
 pub async fn append(
