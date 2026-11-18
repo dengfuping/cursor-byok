@@ -1,0 +1,14 @@
+server/tests/bidi_decode.rs
+  h_f99a5e82bb4645 149-159,162-163,264-285
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "808355fbc867e2e7e3e6d70e68d0b69b8c0eb492",
+  "prompts": {},
+  "humans": {
+    "h_f99a5e82bb4645": {
+      "author": "dengfuping <fuping.dfp@antgroup.com>"
+    }
+  }
+}
