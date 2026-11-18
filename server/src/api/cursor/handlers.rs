@@ -232,7 +232,13 @@ async fn bidi_handler(
 ) -> Result<Response<Body>> {
     let (parts, body) = buffered(request).await?;
     let request: ai::BidiAppendRequest = connect::decode_unary(&body)?;
-    let decoded = bidi::decode(&request)?;
+    let decoded = match bidi::decode(&request) {
+        Ok(decoded) => decoded,
+        Err(error) => {
+            bidi::report_rejection(&request, &error);
+            return Err(error);
+        }
+    };
     let first_model = decoded.model_id().map(str::to_owned);
     let conversation_id = decoded.conversation_id().map(str::to_owned);
     let trace_metadata = decoded.trace_metadata();

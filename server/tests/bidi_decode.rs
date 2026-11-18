@@ -142,6 +142,38 @@ fn overlong_state_payload(extra: usize) -> Vec<u8> {
     payload
 }
 
+/// A state whose field stream is misaligned at a field boundary: the key byte
+/// carries wire type 6, so decoding fails while merging `conversation_state` and
+/// the report names no state field — the shape reported after v1.0.5 shipped.
+fn invalid_wire_type_payload() -> Vec<u8> {
+    let mut state = Vec::new();
+    push_len_delimited(&mut state, 8, b"turn-1");
+    state.push(0x0e); // tag 1, wire type 6 (invalid)
+    state.extend_from_slice(&[0x00, 0x00, 0x00]);
+    push_len_delimited(&mut state, 6, b"summary-bytes");
+
+    let action = pb::ConversationAction {
+        action: Some(pb::conversation_action::Action::UserMessageAction(
+            pb::UserMessageAction {
+                user_message: Some(pb::UserMessage {
+                    message_id: "user-message".into(),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+        )),
+        ..Default::default()
+    }
+    .encode_to_vec();
+
+    let mut request = Vec::new();
+    push_len_delimited(&mut request, 1, &state);
+    push_len_delimited(&mut request, 2, &action);
+    let mut payload = Vec::new();
+    push_len_delimited(&mut payload, 1, &request);
+    payload
+}
+
 fn append_request(payload: Vec<u8>) -> ai::BidiAppendRequest {
     ai::BidiAppendRequest {
         request_id: Some(ai::BidiRequestId {
@@ -216,6 +248,30 @@ fn append_survives_corruption_in_the_middle_of_the_state() {
     assert_eq!(
         state.summary, None,
         "fields after the damage are unreadable and must be dropped"
+    );
+}
+
+#[test]
+fn append_survives_an_invalid_wire_type_inside_the_state() {
+    let payload = invalid_wire_type_payload();
+    let error = pb::AgentClientMessage::decode(payload.as_slice())
+        .expect_err("the fixture must reproduce the reported failure");
+    assert_eq!(
+        error.to_string(),
+        "failed to decode Protobuf message: AgentRunRequest.conversation_state: \
+         AgentClientMessage.message: invalid wire type value: 6"
+    );
+
+    let decoded = bidi::decode(&append_request(payload)).expect("the append must be recovered");
+    let Some(pb::agent_client_message::Message::RunRequest(run)) = decoded.message.message else {
+        panic!("expected a run request");
+    };
+    assert!(run.action.is_some(), "the action must survive");
+    let state = run.conversation_state.expect("the state must be kept");
+    assert_eq!(state.turns, vec![b"turn-1".to_vec()]);
+    assert_eq!(
+        state.summary, None,
+        "everything after the misaligned key is unreadable"
     );
 }
 
