@@ -169,11 +169,34 @@ pub fn decode(request: &ai::BidiAppendRequest) -> Result<DecodedAppend> {
             "BidiAppend contains no AgentClientMessage".into(),
         ));
     };
+    let message = match salvage::decode(&payload) {
+        Ok(message) => message,
+        Err(error) => {
+            reject(request_id, &payload, &error);
+            return Err(error);
+        }
+    };
     Ok(DecodedAppend {
         request_id: request_id.into(),
         seqno: request.append_seqno,
-        message: salvage::decode(&payload)?,
+        message,
     })
+}
+
+/// Keeps the exact bytes of an append that could not be decoded, so the next
+/// report of a corrupt state can be diagnosed instead of guessed at.
+fn reject(request_id: &str, payload: &[u8], error: &Error) {
+    let dump = crate::config::managed_data_dir()
+        .ok()
+        .map(|directory| directory.join("rejected"))
+        .and_then(|directory| salvage::dump_rejected(&directory, request_id, payload));
+    tracing::warn!(
+        request_id,
+        bytes = payload.len(),
+        dump = dump.as_ref().map(|path| path.display().to_string()),
+        %error,
+        "rejected a Cursor append that could not be decoded"
+    );
 }
 
 pub async fn append(

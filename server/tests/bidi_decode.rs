@@ -103,6 +103,45 @@ fn mid_state_corrupt_payload() -> Vec<u8> {
     append_payload(&state)
 }
 
+/// The shape the app hits in the wild: the client writes a
+/// `conversation_state` length that runs past the state and swallows the fields
+/// that follow it, so `action` ends up inside the state region.
+fn overlong_state_payload(extra: usize) -> Vec<u8> {
+    let state = pb::ConversationStateStructure {
+        turns: state_turns(),
+        summary: Some(b"summary-bytes".to_vec()),
+        file_states: [(KEEP_PATH.to_string(), b"keep".to_vec())]
+            .into_iter()
+            .collect(),
+        ..Default::default()
+    }
+    .encode_to_vec();
+    let action = pb::ConversationAction {
+        action: Some(pb::conversation_action::Action::UserMessageAction(
+            pb::UserMessageAction {
+                user_message: Some(pb::UserMessage {
+                    message_id: "user-message".into(),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+        )),
+        ..Default::default()
+    }
+    .encode_to_vec();
+
+    let mut request = Vec::new();
+    prost::encoding::encode_key(1, WireType::LengthDelimited, &mut request);
+    prost::encoding::encode_varint((state.len() + extra) as u64, &mut request);
+    request.extend_from_slice(&state);
+    push_len_delimited(&mut request, 2, &action);
+    push_len_delimited(&mut request, 5, CONVERSATION_ID.as_bytes());
+
+    let mut payload = Vec::new();
+    push_len_delimited(&mut payload, 1, &request);
+    payload
+}
+
 fn append_request(payload: Vec<u8>) -> ai::BidiAppendRequest {
     ai::BidiAppendRequest {
         request_id: Some(ai::BidiRequestId {
@@ -181,8 +220,49 @@ fn append_survives_corruption_in_the_middle_of_the_state() {
 }
 
 #[test]
+fn append_survives_a_state_length_that_swallows_the_action() {
+    for extra in [1usize, 2, 4, 8, 32] {
+        let payload = overlong_state_payload(extra);
+        assert!(
+            pb::AgentClientMessage::decode(payload.as_slice()).is_err(),
+            "the fixture must be corrupt (extra={extra})"
+        );
+        let decoded = bidi::decode(&append_request(payload))
+            .unwrap_or_else(|error| panic!("extra={extra}: {error}"));
+        assert_eq!(
+            decoded.conversation_id(),
+            Some(CONVERSATION_ID),
+            "extra={extra}"
+        );
+        let Some(pb::agent_client_message::Message::RunRequest(run)) = decoded.message.message
+        else {
+            panic!("expected a run request (extra={extra})")
+        };
+        assert!(
+            run.action.is_some(),
+            "the action must survive a state length that overshot (extra={extra})"
+        );
+        let state = run
+            .conversation_state
+            .expect("the readable part of the state must be kept");
+        assert_eq!(state.turns, state_turns(), "extra={extra}");
+    }
+}
+
+#[test]
+fn rejected_payloads_are_written_out_for_diagnosis() {
+    let directory = tempfile::tempdir().unwrap();
+    let payload = vec![0xff, 0xff, 0xff, 0xff];
+    let path = salvage::dump_rejected(directory.path(), "request-id", &payload)
+        .expect("a rejected payload must be written out");
+    assert_eq!(std::fs::read(&path).unwrap(), payload);
+    assert!(path.ends_with("request-id.bin"));
+    assert!(salvage::dump_rejected(directory.path(), "empty", &[]).is_none());
+}
+
+#[test]
 fn salvage_reports_the_fields_it_dropped() {
-    let salvaged = salvage::agent_client_message(&corrupt_append_payload()).unwrap();
+    let salvaged = salvage::salvage_fields(&corrupt_append_payload()).unwrap();
     assert_eq!(
         salvaged.dropped,
         vec![

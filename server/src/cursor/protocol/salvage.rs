@@ -1,16 +1,18 @@
 //! Recovers readable fields from Cursor payloads that prost rejects.
 //!
 //! The Cursor client owns `ConversationStateStructure`. This server never reads
-//! it: it stores the state and echoes it back inside checkpoint updates. A client
-//! that grows a value without rewriting the enclosing length prefix still produces
-//! bytes prost rejects, and failing the append then costs the whole turn even
-//! though nothing the server consumes was damaged.
+//! it: it stores the state and echoes it back inside checkpoint updates. Two
+//! client-side defects still make that opaque blob decide whether a turn runs:
 //!
-//! Salvage keeps every field that decodes on its own and descends through the two
-//! envelope levels that wrap the state (`AgentClientMessage.message` and
-//! `AgentRunRequest.conversation_state`). Nothing else is repaired: a corrupt
-//! action or model field stays a protocol error, because a run started on a
-//! half-read request is worse than a failed append.
+//! - a nested length prefix that disagrees with the field it wraps, and
+//! - a `conversation_state` field length that runs past the serialized state into
+//!   the fields that follow it, which swallows `action`.
+//!
+//! Both are repaired here instead of failing the append. Only the state may lose
+//! bytes: everything the run is built from is either kept byte for byte or the
+//! append stays a protocol error.
+use std::path::{Path, PathBuf};
+
 use prost::{
     encoding::{self, WireType},
     Message,
@@ -18,22 +20,47 @@ use prost::{
 
 use crate::{cursor::protocol::proto::agent::v1 as pb, Result};
 
-/// Decodes an `AgentClientMessage`, dropping unreadable state fields if needed.
+const MAX_DUMP_BYTES: usize = 64 * 1024 * 1024;
+
+/// Decodes an `AgentClientMessage`, repairing unreadable state fields if needed.
 pub fn decode(payload: &[u8]) -> Result<pb::AgentClientMessage> {
     let error = match pb::AgentClientMessage::decode(payload) {
         Ok(message) => return Ok(message),
         Err(error) => error,
     };
-    let Some(salvaged) = agent_client_message(payload) else {
-        return Err(error.into());
-    };
-    let message = pb::AgentClientMessage::decode(salvaged.payload.as_slice())?;
-    tracing::warn!(
-        decode_error = %error,
-        dropped = ?salvaged.dropped,
-        "recovered a Cursor AgentClientMessage after a protobuf decode failure"
-    );
-    Ok(message)
+    let mut fallback = None;
+    for attempt in [salvage_fields, salvage_resync] {
+        let Some(salvaged) = attempt(payload) else {
+            continue;
+        };
+        let Some(message) = pb::AgentClientMessage::decode(salvaged.payload.as_slice()).ok() else {
+            continue;
+        };
+        // A repaired request that lost its action is not a repair, so prefer the
+        // attempt that still describes the turn. Without one, keep the first
+        // readable result rather than refusing a request that never had an action.
+        if has_action(&message) {
+            recovered(&error, &salvaged.dropped);
+            return Ok(message);
+        }
+        fallback.get_or_insert((salvaged.dropped, message));
+    }
+    if let Some((dropped, message)) = fallback {
+        recovered(&error, &dropped);
+        return Ok(message);
+    }
+    Err(error.into())
+}
+
+/// Writes a rejected append next to the database so it can be inspected later.
+pub fn dump_rejected(directory: &Path, request_id: &str, payload: &[u8]) -> Option<PathBuf> {
+    if payload.is_empty() || payload.len() > MAX_DUMP_BYTES {
+        return None;
+    }
+    std::fs::create_dir_all(directory).ok()?;
+    let path = directory.join(format!("{request_id}.bin"));
+    std::fs::write(&path, payload).ok()?;
+    Some(path)
 }
 
 /// A payload re-encoded without the fields that failed to decode.
@@ -43,13 +70,34 @@ pub struct Salvaged {
     pub dropped: Vec<String>,
 }
 
-/// Rewrites an `AgentClientMessage` payload into its longest decodable form.
-///
-/// Returns `None` when the outer message cannot be split into fields at all.
-pub fn agent_client_message(payload: &[u8]) -> Option<Salvaged> {
+/// Drops every field inside `conversation_state` that cannot be decoded.
+pub fn salvage_fields(payload: &[u8]) -> Option<Salvaged> {
     let mut dropped = Vec::new();
     let payload = rebuild(Level::Client, payload, &mut dropped)?;
     Some(Salvaged { payload, dropped })
+}
+
+/// Finds where the state really ends when its length prefix overshoots it.
+pub fn salvage_resync(payload: &[u8]) -> Option<Salvaged> {
+    let mut dropped = Vec::new();
+    let payload = resync(payload, &mut dropped)?;
+    Some(Salvaged { payload, dropped })
+}
+
+/// Whether the decoded message still carries the turn it was sent for.
+fn has_action(message: &pb::AgentClientMessage) -> bool {
+    match message.message.as_ref() {
+        Some(pb::agent_client_message::Message::RunRequest(request)) => request.action.is_some(),
+        _ => true,
+    }
+}
+
+fn recovered(error: &prost::DecodeError, dropped: &[String]) {
+    tracing::warn!(
+        decode_error = %error,
+        dropped = ?dropped,
+        "recovered a Cursor AgentClientMessage after a protobuf decode failure"
+    );
 }
 
 #[derive(Clone, Copy)]
@@ -110,21 +158,145 @@ fn rebuild(level: Level, payload: &[u8], dropped: &mut Vec<String>) -> Option<Ve
             .nested(level)
             .and_then(|nested| rebuild(nested, field.value, dropped));
         match rebuilt {
-            Some(value) => {
-                encoding::encode_key(field.tag, WireType::LengthDelimited, &mut output);
-                encoding::encode_varint(value.len() as u64, &mut output);
-                output.extend_from_slice(&value);
-            }
+            Some(value) => encode_field(&mut output, field.tag, &value),
             None if level.drops_fields() => {
                 dropped.push(format!("{}#{}", level.message(), field.tag));
             }
-            None => return None,
+            // Keep unreadable fields exactly as they are: the final decode then
+            // reports the real problem instead of a state field it never touched.
+            None => {
+                dropped.push(format!("{}#{} kept", level.message(), field.tag));
+                output.extend_from_slice(field.raw);
+            }
         }
     }
     if unparsed > 0 {
         dropped.push(format!("{}#tail({unparsed}B)", level.message()));
     }
     Some(output)
+}
+
+/// Recovers a run request whose `conversation_state` length overshoots the state.
+///
+/// The bytes after the real state are `action` and the rest of the request, but
+/// their boundary is lost. The true boundary is one of the state's own field
+/// boundaries, so those are the candidates; one is accepted when the bytes that
+/// follow it parse as the rest of a run request, action first.
+fn resync(payload: &[u8], dropped: &mut Vec<String>) -> Option<Vec<u8>> {
+    let envelope = split(payload)?;
+    let [message_field] = envelope.as_slice() else {
+        return None;
+    };
+    if message_field.tag != 1 || !matches!(message_field.wire_type, WireType::LengthDelimited) {
+        return None;
+    }
+    let request = message_field.value;
+    let mut offset = 0;
+    while offset < request.len() {
+        let field_start = offset;
+        let header = header(request, offset)?;
+        offset = header.end;
+        if header.tag != 1 || !matches!(header.wire_type, WireType::LengthDelimited) {
+            continue;
+        }
+        // Walk the candidates from the largest down: the declared end is the
+        // right answer when the state itself is corrupt, and the true boundary
+        // when the length prefix overshot. Either way it is the last one whose
+        // remainder still reads as the rest of the request.
+        for end in boundaries(request, header.value_start).into_iter().rev() {
+            if end <= header.value_start
+                || end > request.len()
+                || !starts_with_action(&request[end..])
+            {
+                continue;
+            }
+            if !remainder_decodes(&request[end..]) {
+                continue;
+            }
+            let state = rebuild(Level::State, &request[header.value_start..end], dropped)?;
+            let mut rebuilt = Vec::with_capacity(request.len());
+            rebuilt.extend_from_slice(&request[..field_start]);
+            encode_field(&mut rebuilt, 1, &state);
+            rebuilt.extend_from_slice(&request[end..]);
+            dropped.push(format!("AgentRunRequest#1@end={end}"));
+            let mut output = Vec::with_capacity(payload.len());
+            encode_field(&mut output, 1, &rebuilt);
+            return Some(output);
+        }
+        return None;
+    }
+    None
+}
+
+/// Every field boundary inside a message region, including the declared end.
+fn boundaries(payload: &[u8], start: usize) -> Vec<usize> {
+    const MAX_BOUNDARIES: usize = 4096;
+    let mut found = Vec::new();
+    let mut offset = start;
+    while offset < payload.len() && found.len() < MAX_BOUNDARIES {
+        let Some(header) = header(payload, offset) else {
+            break;
+        };
+        if header.end <= offset {
+            break;
+        }
+        found.push(header.end.min(payload.len()));
+        offset = header.end;
+    }
+    found
+}
+
+fn starts_with_action(rest: &[u8]) -> bool {
+    header(rest, 0).is_some_and(|header| {
+        header.tag == 2 && matches!(header.wire_type, WireType::LengthDelimited)
+    })
+}
+
+fn remainder_decodes(rest: &[u8]) -> bool {
+    let Some(fields) = split(rest) else {
+        return false;
+    };
+    !fields.is_empty()
+        && fields
+            .iter()
+            .all(|field| pb::AgentRunRequest::decode(field.raw).is_ok())
+}
+
+fn encode_field(output: &mut Vec<u8>, tag: u32, payload: &[u8]) {
+    encoding::encode_key(tag, WireType::LengthDelimited, output);
+    encoding::encode_varint(payload.len() as u64, output);
+    output.extend_from_slice(payload);
+}
+
+struct Header {
+    tag: u32,
+    wire_type: WireType,
+    value_start: usize,
+    /// Offset just past the field, even when the declared length overshoots.
+    end: usize,
+}
+
+fn header(payload: &[u8], offset: usize) -> Option<Header> {
+    let mut buf = &payload[offset..];
+    let (tag, wire_type) = encoding::decode_key(&mut buf).ok()?;
+    if !matches!(wire_type, WireType::LengthDelimited) {
+        encoding::skip_field(wire_type, tag, &mut buf, Default::default()).ok()?;
+        let end = payload.len() - buf.len();
+        return Some(Header {
+            tag,
+            wire_type,
+            value_start: end,
+            end,
+        });
+    }
+    let declared = usize::try_from(encoding::decode_varint(&mut buf).ok()?).ok()?;
+    let value_start = payload.len() - buf.len();
+    Some(Header {
+        tag,
+        wire_type,
+        value_start,
+        end: value_start.saturating_add(declared),
+    })
 }
 
 struct Field<'a> {
