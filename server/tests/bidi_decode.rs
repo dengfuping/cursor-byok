@@ -208,15 +208,18 @@ fn corrupt_append_payload_fails_strict_decoding() {
 
 #[test]
 fn valid_append_payload_decodes_unchanged() {
-    let decoded = bidi::decode(&append_request(valid_append_payload())).unwrap();
+    let decoded = bidi::decode(&append_request(valid_append_payload()), false)
+        .unwrap()
+        .into_agent();
     assert_eq!(decoded.conversation_id(), Some(CONVERSATION_ID));
     assert_eq!(decoded.model_id(), Some(MODEL_ID));
 }
 
 #[test]
 fn append_survives_a_corrupt_file_state_entry() {
-    let decoded = bidi::decode(&append_request(corrupt_append_payload()))
-        .expect("a corrupt file state must not fail the whole append");
+    let decoded = bidi::decode(&append_request(corrupt_append_payload()), false)
+        .expect("a corrupt file state must not fail the whole append")
+        .into_agent();
 
     assert_eq!(decoded.conversation_id(), Some(CONVERSATION_ID));
     assert_eq!(decoded.model_id(), Some(MODEL_ID));
@@ -242,8 +245,9 @@ fn append_survives_a_corrupt_file_state_entry() {
 
 #[test]
 fn append_survives_corruption_in_the_middle_of_the_state() {
-    let decoded = bidi::decode(&append_request(mid_state_corrupt_payload()))
-        .expect("a corrupt file state must not fail the whole append");
+    let decoded = bidi::decode(&append_request(mid_state_corrupt_payload()), false)
+        .expect("a corrupt file state must not fail the whole append")
+        .into_agent();
     let Some(pb::agent_client_message::Message::RunRequest(run)) = decoded.message.message else {
         panic!("expected a run request");
     };
@@ -273,7 +277,9 @@ fn append_survives_a_misaligned_plan_key_inside_the_state() {
          invalid wire type: SixtyFourBit (expected LengthDelimited)"
     );
 
-    let decoded = bidi::decode(&append_request(payload)).expect("the append must be recovered");
+    let decoded = bidi::decode(&append_request(payload), false)
+        .expect("the append must be recovered")
+        .into_agent();
     let Some(pb::agent_client_message::Message::RunRequest(run)) = decoded.message.message else {
         panic!("expected a run request");
     };
@@ -294,7 +300,9 @@ fn append_survives_an_invalid_wire_type_inside_the_state() {
          AgentClientMessage.message: invalid wire type value: 6"
     );
 
-    let decoded = bidi::decode(&append_request(payload)).expect("the append must be recovered");
+    let decoded = bidi::decode(&append_request(payload), false)
+        .expect("the append must be recovered")
+        .into_agent();
     let Some(pb::agent_client_message::Message::RunRequest(run)) = decoded.message.message else {
         panic!("expected a run request");
     };
@@ -315,8 +323,9 @@ fn append_survives_a_state_length_that_swallows_the_action() {
             pb::AgentClientMessage::decode(payload.as_slice()).is_err(),
             "the fixture must be corrupt (extra={extra})"
         );
-        let decoded = bidi::decode(&append_request(payload))
-            .unwrap_or_else(|error| panic!("extra={extra}: {error}"));
+        let decoded = bidi::decode(&append_request(payload), false)
+            .unwrap_or_else(|error| panic!("extra={extra}: {error}"))
+            .into_agent();
         assert_eq!(
             decoded.conversation_id(),
             Some(CONVERSATION_ID),
@@ -382,7 +391,7 @@ fn corrupt_run_request_fields_stay_a_protocol_error() {
 
     let mut payload = Vec::new();
     push_len_delimited(&mut payload, 1, &request_bytes);
-    let Err(error) = bidi::decode(&append_request(payload)) else {
+    let Err(error) = bidi::decode(&append_request(payload), false) else {
         panic!("a corrupt action must fail the append");
     };
     assert!(
@@ -397,11 +406,11 @@ fn truncated_payload_stays_a_protocol_error() {
     // surviving prefix must not be turned into a half-read run request.
     let mut payload = valid_append_payload();
     payload.truncate(payload.len() - 3);
-    assert!(bidi::decode(&append_request(payload)).is_err());
+    assert!(bidi::decode(&append_request(payload), false).is_err());
 }
 
 #[test]
 fn unreadable_envelope_stays_a_protocol_error() {
     let request = append_request(vec![0xff, 0xff, 0xff, 0xff]);
-    assert!(bidi::decode(&request).is_err());
+    assert!(bidi::decode(&request, false).is_err());
 }

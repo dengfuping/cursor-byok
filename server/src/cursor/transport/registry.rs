@@ -22,7 +22,7 @@ use crate::{
     Result,
 };
 
-use super::{OutputHub, TransportHandle};
+use super::{inference::InferenceHub, OutputHub, TransportHandle};
 
 #[derive(Clone)]
 pub struct TransportRegistry {
@@ -39,6 +39,7 @@ struct RegistryInner {
     web_cache: WebCache,
     plugins: Option<PluginRegistry>,
     conversations: ConversationRegistry,
+    inference: InferenceHub,
 }
 
 #[derive(Clone)]
@@ -54,6 +55,10 @@ pub enum TransportRoute {
 }
 
 impl TransportRegistry {
+    pub fn inference(&self) -> InferenceHub {
+        self.inner.inference.clone()
+    }
+
     pub fn new(store: Store, provider: Arc<dyn Provider>, compiler: PromptCompiler) -> Self {
         Self::with_web_cache(store, provider, compiler, WebCache::default())
     }
@@ -117,6 +122,7 @@ impl TransportRegistry {
                 upstream: Mutex::new(HashMap::new()),
                 route_changed: Notify::new(),
                 traces: CursorTraceService::new(store.clone()),
+                inference: InferenceHub::default(),
                 conversations: ConversationRegistry::new(
                     store.clone(),
                     provider,

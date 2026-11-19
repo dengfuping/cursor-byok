@@ -15,6 +15,7 @@ use crate::{
 
 /// A decoded `RunInferenceClientMessage`, keeping only the shape this server
 /// cares about.
+#[derive(Debug)]
 pub enum Frame {
     RunRequest(Box<pb::RunInferenceRunRequest>),
     InvokeModel(Box<pb::RunInferenceInvokeModel>),

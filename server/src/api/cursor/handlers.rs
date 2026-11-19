@@ -10,7 +10,7 @@ use tower_http::decompression::RequestDecompressionLayer;
 
 use crate::{
     api::cursor::{
-        bidi,
+        bidi, inference_sse,
         proxy::{self, CursorProxy},
         run_sse,
     },
@@ -47,6 +47,10 @@ fn router_with_proxy(
     Router::new()
         .route("/__byok-api__/healthz", get(health))
         .route("/agent.v1.AgentService/RunSSE", post(run_sse_handler))
+        .route(
+            "/aiserver.v1.InferenceService/RunInferenceSSE",
+            post(inference_sse::stream),
+        )
         .route("/aiserver.v1.BidiService/BidiAppend", post(bidi_handler))
         .route(
             "/aiserver.v1.AiService/AvailableDocs",
@@ -225,6 +229,17 @@ async fn run_sse_handler(
     }
 }
 
+/// Empty unary response for an endpoint that only acknowledges the frame.
+fn proto_response() -> Response<Body> {
+    let mut response = Response::new(Body::empty());
+    *response.status_mut() = StatusCode::OK;
+    response.headers_mut().insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/proto"),
+    );
+    response
+}
+
 async fn bidi_handler(
     State(registry): State<TransportRegistry>,
     Extension(proxy): Extension<CursorProxy>,
@@ -232,8 +247,16 @@ async fn bidi_handler(
 ) -> Result<Response<Body>> {
     let (parts, body) = buffered(request).await?;
     let request: ai::BidiAppendRequest = connect::decode_unary(&body)?;
-    let decoded = match bidi::decode(&request) {
-        Ok(decoded) => decoded,
+    let inference_active = match bidi::request_id_of(&request) {
+        Ok(request_id) => registry.inference().is_active(request_id).await,
+        Err(_) => false,
+    };
+    let decoded = match bidi::decode(&request, inference_active) {
+        Ok(bidi::Decoded::Agent(decoded)) => decoded,
+        Ok(bidi::Decoded::Inference { request_id, frame }) => {
+            bidi::handle_inference(&registry, &request_id, frame).await?;
+            return Ok(proto_response());
+        }
         Err(error) => {
             bidi::report_rejection(&request, &error);
             return Err(error);
