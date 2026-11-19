@@ -224,6 +224,11 @@ pub async fn handle_inference(
                 run = %inference::describe(&request),
                 "run inference started"
             );
+            hub.set_conversation(request_id, &request.conversation_id)
+                .await;
+            if let Some(model) = inference::requested_model(&request) {
+                hub.set_resolved_model(request_id, &model).await;
+            }
             hub.publish(
                 request_id,
                 &pb::RunInferenceServerMessage {
@@ -246,53 +251,50 @@ pub async fn handle_inference(
         }
         inference::Frame::InvokeModel(request) => {
             let context = request.request.as_ref();
+            let invocation_id = request.invocation_id.clone();
             tracing::info!(
                 request_id,
-                invocation_id = request.invocation_id,
+                invocation_id,
                 messages = context.map_or(0, |context| context.messages.len()),
                 tools = context.map_or(0, |context| context.tools.len()),
                 model = context.and_then(|context| context.model_id.clone()),
                 tool_batches = request.tool_call_batches.len(),
                 "run inference invoke_model"
             );
-            let invocation_id = request.invocation_id.clone();
-            // The agent host tracks the model invocation id across the stream and
-            // needs it echoed before any content; it also counts output tokens
-            // from the usage part.
-            let text = "cursor-byok: RunInference path reached";
-            // The agent host maps `text_part` with `is_final` to a finish event and
-            // only treats parts without it as content, so the text goes out as a
-            // delta followed by an empty terminal part.
-            for response in [
-                invocation_id_response(&invocation_id),
-                stream_response(text, false),
-                stream_response("", true),
-                usage_response(text),
-            ] {
-                hub.publish(
-                    request_id,
-                    &pb::RunInferenceServerMessage {
-                        message: Some(Server::InvocationResponse(
-                            pb::RunInferenceInvocationResponse {
-                                invocation_id: invocation_id.clone(),
-                                response: Some(response),
-                            },
-                        )),
-                    },
-                )
-                .await?;
-            }
-            hub.publish(
-                request_id,
-                &pb::RunInferenceServerMessage {
-                    message: Some(Server::InvocationEnd(pb::RunInferenceInvocationEnd {
-                        invocation_id,
-                        error: None,
-                        delta_refused: None,
-                    })),
-                },
-            )
-            .await?;
+            let Some(context) = request.request.clone() else {
+                tracing::warn!(request_id, invocation_id, "invoke_model carries no request");
+                return Ok(());
+            };
+            let conversation_id = registry
+                .inference()
+                .conversation(request_id)
+                .await
+                .unwrap_or_default();
+            let invocation = crate::cursor::inference::Invocation {
+                request_id: request_id.to_owned(),
+                invocation_id: invocation_id.clone(),
+                conversation_id,
+                resolved_model: registry.inference().resolved_model(request_id).await,
+                request: context,
+            };
+            let store = registry.store().clone();
+            let provider = registry.provider();
+            let hub = registry.inference();
+            let task_request_id = request_id.to_owned();
+            let task_invocation_id = invocation_id.clone();
+            tokio::spawn(async move {
+                if let Err(error) =
+                    crate::cursor::inference::run(store, provider, hub, invocation).await
+                {
+                    tracing::warn!(
+                        request_id = task_request_id,
+                        invocation_id = task_invocation_id,
+                        %error,
+                        "inference invocation failed"
+                    );
+                }
+            });
+            return Ok(());
         }
         inference::Frame::FinishRun(_) => tracing::info!(request_id, "run inference finish_run"),
         inference::Frame::CancelInvocation(frame) => tracing::info!(
@@ -328,45 +330,6 @@ fn prompt_vendor(request: &pb::RunInferenceRunRequest) -> &'static str {
 
 /// Prompt version the client knows; `cursor-0226` is what its own catalog sends.
 const PROMPT_VERSION: &str = "cursor-0226";
-
-fn stream_response(text: &str, is_final: bool) -> pb::InferenceStreamResponse {
-    use pb::inference_stream_response::Response;
-
-    pb::InferenceStreamResponse {
-        response: Some(Response::TextPart(pb::InferenceTextStreamPart {
-            text: text.into(),
-            is_final,
-        })),
-        ..Default::default()
-    }
-}
-
-/// Echoes the model invocation id the agent host expects to see first.
-fn invocation_id_response(invocation_id: &str) -> pb::InferenceStreamResponse {
-    use pb::inference_stream_response::Response;
-
-    pb::InferenceStreamResponse {
-        response: Some(Response::InvocationId(pb::InferenceInvocationIdInfo {
-            invocation_id: invocation_id.into(),
-        })),
-        ..Default::default()
-    }
-}
-
-/// Rough token accounting so the agent host does not classify the turn as empty.
-fn usage_response(text: &str) -> pb::InferenceStreamResponse {
-    use pb::inference_stream_response::Response;
-
-    let completion = (text.chars().count() / 4).max(1) as i32;
-    pb::InferenceStreamResponse {
-        response: Some(Response::Usage(pb::InferenceUsageInfo {
-            prompt_tokens: 0,
-            completion_tokens: completion,
-            total_tokens: Some(completion),
-        })),
-        ..Default::default()
-    }
-}
 
 /// Keeps the bytes of an append that could not be decoded, so the next report of
 /// a corrupt state can be diagnosed from data instead of inference.
