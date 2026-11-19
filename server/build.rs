@@ -5,6 +5,7 @@ fn main() {
     let manifest = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("manifest directory"));
     let proto_dir = manifest.join("../protocols/cursor");
     let protos = [proto_dir.join("agent_v1.proto")];
+    let inference_proto = proto_dir.join("inference_v1.proto");
     let aiserver_proto = proto_dir.join("aiserver_v1.proto");
 
     env::set_var(
@@ -22,7 +23,17 @@ fn main() {
         )
         .expect("compile Cursor protobuf schema");
 
-    for proto in protos {
+    prost_build::Config::new()
+        .compile_protos(
+            std::slice::from_ref(&inference_proto),
+            &[
+                proto_dir.clone(),
+                protoc_bin_vendored::include_path().expect("vendored protobuf includes"),
+            ],
+        )
+        .expect("compile Cursor inference schema");
+
+    for proto in protos.into_iter().chain(std::iter::once(inference_proto)) {
         println!("cargo:rerun-if-changed={}", proto.display());
     }
     let aiserver_source = std::fs::read_to_string(&aiserver_proto).expect("read aiserver_v1.proto");
