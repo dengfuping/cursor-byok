@@ -40,6 +40,7 @@ struct RegistryInner {
     plugins: Option<PluginRegistry>,
     conversations: ConversationRegistry,
     inference: InferenceHub,
+    provider: Arc<dyn Provider>,
 }
 
 #[derive(Clone)]
@@ -57,6 +58,11 @@ pub enum TransportRoute {
 impl TransportRegistry {
     pub fn inference(&self) -> InferenceHub {
         self.inner.inference.clone()
+    }
+
+    /// Provider router shared with the conversation runtime.
+    pub fn provider(&self) -> Arc<dyn Provider> {
+        self.inner.provider.clone()
     }
 
     pub fn new(store: Store, provider: Arc<dyn Provider>, compiler: PromptCompiler) -> Self {
@@ -123,6 +129,7 @@ impl TransportRegistry {
                 route_changed: Notify::new(),
                 traces: CursorTraceService::new(store.clone()),
                 inference: InferenceHub::default(),
+                provider: provider.clone(),
                 conversations: ConversationRegistry::new(
                     store.clone(),
                     provider,

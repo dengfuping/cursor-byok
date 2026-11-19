@@ -9,6 +9,7 @@ mod registry;
 
 pub use handle::*;
 pub use inbox::*;
+pub use inference::InferenceHub;
 pub(crate) use lifecycle::*;
 pub use output::*;
 pub use registry::*;

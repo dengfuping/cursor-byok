@@ -7,6 +7,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use bytes::Bytes;
 use tokio::sync::{mpsc, Mutex};
+use tokio_util::sync::CancellationToken;
 
 use crate::{
     cursor::protocol::{connect, proto::inference::v1 as pb},
@@ -21,6 +22,9 @@ const MAX_QUEUED_FRAMES: usize = 256;
 struct Channel {
     sender: Option<mpsc::UnboundedSender<Bytes>>,
     queued: Vec<Bytes>,
+    conversation_id: Option<String>,
+    resolved_model: Option<String>,
+    cancellations: HashMap<String, CancellationToken>,
 }
 
 /// Routes `RunInferenceServerMessage` frames to the SSE stream of one request.
@@ -65,6 +69,83 @@ impl InferenceHub {
 
     pub async fn detach(&self, request_id: &str) {
         self.inner.lock().await.remove(request_id);
+    }
+
+    /// Remembers which conversation the request belongs to, for provider calls.
+    pub async fn set_conversation(&self, request_id: &str, conversation_id: &str) {
+        let mut inner = self.inner.lock().await;
+        inner
+            .entry(request_id.to_owned())
+            .or_default()
+            .conversation_id = Some(conversation_id.to_owned());
+    }
+
+    /// Remembers the model named in `run_ready`; `invoke_model` does not carry it.
+    pub async fn set_resolved_model(&self, request_id: &str, model_id: &str) {
+        let mut inner = self.inner.lock().await;
+        inner
+            .entry(request_id.to_owned())
+            .or_default()
+            .resolved_model = Some(model_id.to_owned());
+    }
+
+    pub async fn resolved_model(&self, request_id: &str) -> Option<String> {
+        self.inner
+            .lock()
+            .await
+            .get(request_id)
+            .and_then(|channel| channel.resolved_model.clone())
+    }
+
+    pub async fn conversation(&self, request_id: &str) -> Option<String> {
+        self.inner
+            .lock()
+            .await
+            .get(request_id)
+            .and_then(|channel| channel.conversation_id.clone())
+    }
+
+    /// Registers the provider call of an invocation so a cancel can stop it.
+    pub async fn register_invocation(
+        &self,
+        request_id: &str,
+        invocation_id: &str,
+    ) -> CancellationToken {
+        let cancellation = CancellationToken::new();
+        let mut inner = self.inner.lock().await;
+        inner
+            .entry(request_id.to_owned())
+            .or_default()
+            .cancellations
+            .insert(invocation_id.to_owned(), cancellation.clone());
+        cancellation
+    }
+
+    /// Stops one invocation the agent host cancelled.
+    pub async fn cancel_invocation(&self, request_id: &str, invocation_id: &str) {
+        let token = self
+            .inner
+            .lock()
+            .await
+            .get(request_id)
+            .and_then(|channel| channel.cancellations.get(invocation_id).cloned());
+        if let Some(token) = token {
+            token.cancel();
+        }
+    }
+
+    /// Stops every invocation of a request, for example when the stream closes.
+    pub async fn cancel_request(&self, request_id: &str) {
+        let tokens = self
+            .inner
+            .lock()
+            .await
+            .get(request_id)
+            .map(|channel| channel.cancellations.values().cloned().collect::<Vec<_>>())
+            .unwrap_or_default();
+        for token in tokens {
+            token.cancel();
+        }
     }
 
     /// Whether this request already runs on the inference protocol.
