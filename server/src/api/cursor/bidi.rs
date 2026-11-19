@@ -3,7 +3,7 @@ use crate::{
     cursor::{
         conversation::TransportCommand,
         protocol::{
-            events,
+            events, inference,
             proto::{agent::v1 as agent, aiserver::v1 as ai},
             salvage,
         },
@@ -155,6 +155,9 @@ fn history_image_count(history: &agent::ConversationHistory) -> usize {
 pub fn decode(request: &ai::BidiAppendRequest) -> Result<DecodedAppend> {
     let request_id = request_id(request)?;
     let payload = payload(request)?;
+    if let Some(frame) = inference::classify(&payload) {
+        return Err(reject_run_inference(request_id, &payload, frame));
+    }
     Ok(DecodedAppend {
         request_id: request_id.into(),
         seqno: request.append_seqno,
@@ -183,6 +186,41 @@ pub fn report_rejection(request: &ai::BidiAppendRequest, error: &Error) {
         %error,
         "rejected a Cursor append that could not be decoded"
     );
+}
+
+/// Cursor's newer agent loop sends `aiserver.v1.InferenceService` frames instead
+/// of `agent.v1.AgentRunRequest`. This server does not implement that protocol
+/// yet; report it precisely instead of failing as a corrupt conversation state.
+fn reject_run_inference(request_id: &str, payload: &[u8], frame: inference::Frame) -> Error {
+    let described = match frame {
+        inference::Frame::RunRequest(request) => {
+            let text = inference::routing_text(&request);
+            format!(
+                "run_request {} routing_text_parts={}",
+                inference::describe(&request),
+                text.len()
+            )
+        }
+        inference::Frame::InvokeModel(_) => "invoke_model".to_string(),
+        inference::Frame::FinishRun(_) => "finish_run".to_string(),
+        inference::Frame::CancelInvocation(_) => "cancel_invocation".to_string(),
+        inference::Frame::Heartbeat => "heartbeat".to_string(),
+        inference::Frame::Other(kind) => kind.to_string(),
+    };
+    let dump = crate::config::managed_data_dir()
+        .ok()
+        .map(|directory| directory.join("rejected"))
+        .and_then(|directory| salvage::dump_rejected(&directory, request_id, payload));
+    tracing::warn!(
+        request_id,
+        frame = described,
+        dump = dump.as_ref().map(|path| path.display().to_string()),
+        "received a Cursor RunInference frame; the protocol is not implemented yet"
+    );
+    Error::Protocol(
+        "Cursor switched this run to aiserver RunInference, which cursor-byok does not support yet"
+            .into(),
+    )
 }
 
 fn request_id(request: &ai::BidiAppendRequest) -> Result<&str> {
