@@ -2,6 +2,7 @@
 
 mod handle;
 mod inbox;
+pub mod inference;
 mod lifecycle;
 mod output;
 mod registry;

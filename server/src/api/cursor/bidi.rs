@@ -4,7 +4,7 @@ use crate::{
         conversation::TransportCommand,
         protocol::{
             events, inference,
-            proto::{agent::v1 as agent, aiserver::v1 as ai},
+            proto::{agent::v1 as agent, aiserver::v1 as ai, inference::v1 as pb},
             salvage,
         },
         transport::{TransportParent, TransportRegistry},
@@ -152,17 +152,220 @@ fn history_image_count(history: &agent::ConversationHistory) -> usize {
         .sum()
 }
 
-pub fn decode(request: &ai::BidiAppendRequest) -> Result<DecodedAppend> {
+#[allow(clippy::large_enum_variant)]
+pub enum Decoded {
+    /// A legacy `agent.v1` append handled by the conversation runtime.
+    Agent(DecodedAppend),
+    /// An `aiserver.v1.InferenceService` frame handled by the inference path.
+    Inference {
+        request_id: String,
+        frame: inference::Frame,
+    },
+}
+
+/// The request id of an append, for callers that need it before decoding.
+pub fn request_id_of(request: &ai::BidiAppendRequest) -> Result<&str> {
+    request_id(request)
+}
+
+pub fn decode(request: &ai::BidiAppendRequest, inference_active: bool) -> Result<Decoded> {
     let request_id = request_id(request)?;
     let payload = payload(request)?;
-    if let Some(frame) = inference::classify(&payload) {
-        return Err(reject_run_inference(request_id, &payload, frame));
+    let inference_frame = inference::classify(&payload).or_else(|| {
+        // Once a run uses the inference protocol, every later frame of that
+        // request belongs to it; `finish_run` has no identifying field.
+        inference_active
+            .then(|| inference::decode(&payload))
+            .flatten()
+            .and_then(std::result::Result::ok)
+    });
+    if let Some(frame) = inference_frame {
+        return Ok(Decoded::Inference {
+            request_id: request_id.into(),
+            frame,
+        });
     }
-    Ok(DecodedAppend {
+    Ok(Decoded::Agent(DecodedAppend {
         request_id: request_id.into(),
         seqno: request.append_seqno,
         message: salvage::decode(&payload)?,
-    })
+    }))
+}
+
+impl Decoded {
+    /// The agent append, for callers that expect the legacy protocol.
+    pub fn into_agent(self) -> DecodedAppend {
+        match self {
+            Self::Agent(decoded) => decoded,
+            Self::Inference { frame, .. } => {
+                panic!("expected an agent.v1 append, got an inference frame: {frame:?}")
+            }
+        }
+    }
+}
+
+/// Answers the `aiserver.v1.InferenceService` frames the agent host sends.
+///
+/// `run_request` is acknowledged with `run_ready`; `invoke_model` is where the
+/// model call belongs and currently answers with a marker text so the frame
+/// plumbing can be verified end to end.
+pub async fn handle_inference(
+    registry: &TransportRegistry,
+    request_id: &str,
+    frame: inference::Frame,
+) -> Result<()> {
+    use pb::run_inference_server_message::Message as Server;
+
+    let hub = registry.inference();
+    match frame {
+        inference::Frame::RunRequest(request) => {
+            tracing::info!(
+                request_id,
+                run = %inference::describe(&request),
+                "run inference started"
+            );
+            hub.publish(
+                request_id,
+                &pb::RunInferenceServerMessage {
+                    message: Some(Server::RunReady(pb::RunInferenceRunReady {
+                        resolved_model: request.requested_model.clone(),
+                        // The agent host builds the prompt locally and refuses
+                        // the turn without a model family: `metadata-unavailable`
+                        // comes from an empty `prompt_model_metadata`.
+                        prompt_model_metadata: Some(pb::RunInferencePromptModelMetadata {
+                            vendor: prompt_vendor(&request).into(),
+                            prompt_version: PROMPT_VERSION.into(),
+                            ..Default::default()
+                        }),
+                        accepts_client_heartbeat: true,
+                        ..Default::default()
+                    })),
+                },
+            )
+            .await?;
+        }
+        inference::Frame::InvokeModel(request) => {
+            let context = request.request.as_ref();
+            tracing::info!(
+                request_id,
+                invocation_id = request.invocation_id,
+                messages = context.map_or(0, |context| context.messages.len()),
+                tools = context.map_or(0, |context| context.tools.len()),
+                model = context.and_then(|context| context.model_id.clone()),
+                tool_batches = request.tool_call_batches.len(),
+                "run inference invoke_model"
+            );
+            let invocation_id = request.invocation_id.clone();
+            // The agent host tracks the model invocation id across the stream and
+            // needs it echoed before any content; it also counts output tokens
+            // from the usage part.
+            let text = "cursor-byok: RunInference path reached";
+            // The agent host maps `text_part` with `is_final` to a finish event and
+            // only treats parts without it as content, so the text goes out as a
+            // delta followed by an empty terminal part.
+            for response in [
+                invocation_id_response(&invocation_id),
+                stream_response(text, false),
+                stream_response("", true),
+                usage_response(text),
+            ] {
+                hub.publish(
+                    request_id,
+                    &pb::RunInferenceServerMessage {
+                        message: Some(Server::InvocationResponse(
+                            pb::RunInferenceInvocationResponse {
+                                invocation_id: invocation_id.clone(),
+                                response: Some(response),
+                            },
+                        )),
+                    },
+                )
+                .await?;
+            }
+            hub.publish(
+                request_id,
+                &pb::RunInferenceServerMessage {
+                    message: Some(Server::InvocationEnd(pb::RunInferenceInvocationEnd {
+                        invocation_id,
+                        error: None,
+                        delta_refused: None,
+                    })),
+                },
+            )
+            .await?;
+        }
+        inference::Frame::FinishRun(_) => tracing::info!(request_id, "run inference finish_run"),
+        inference::Frame::CancelInvocation(frame) => tracing::info!(
+            request_id,
+            invocation_id = frame.invocation_id,
+            "run inference cancel_invocation"
+        ),
+        inference::Frame::Heartbeat => {}
+        inference::Frame::Other(kind) => tracing::debug!(request_id, frame = kind),
+    }
+    Ok(())
+}
+
+/// Prompt family the agent host should build for, derived from the model id.
+///
+/// The vendor only changes the prompt shape the client renders; BYOK models are
+/// served by OpenAI- or Anthropic-compatible endpoints, so the vendor of the
+/// configured model decides.
+fn prompt_vendor(request: &pb::RunInferenceRunRequest) -> &'static str {
+    let model = request
+        .requested_model
+        .as_ref()
+        .map(|model| model.model_id.to_ascii_lowercase())
+        .unwrap_or_default();
+    if model.contains("claude") || model.contains("sonnet") || model.contains("opus") {
+        "anthropic"
+    } else if model.contains("gemini") {
+        "google"
+    } else {
+        "openai"
+    }
+}
+
+/// Prompt version the client knows; `cursor-0226` is what its own catalog sends.
+const PROMPT_VERSION: &str = "cursor-0226";
+
+fn stream_response(text: &str, is_final: bool) -> pb::InferenceStreamResponse {
+    use pb::inference_stream_response::Response;
+
+    pb::InferenceStreamResponse {
+        response: Some(Response::TextPart(pb::InferenceTextStreamPart {
+            text: text.into(),
+            is_final,
+        })),
+        ..Default::default()
+    }
+}
+
+/// Echoes the model invocation id the agent host expects to see first.
+fn invocation_id_response(invocation_id: &str) -> pb::InferenceStreamResponse {
+    use pb::inference_stream_response::Response;
+
+    pb::InferenceStreamResponse {
+        response: Some(Response::InvocationId(pb::InferenceInvocationIdInfo {
+            invocation_id: invocation_id.into(),
+        })),
+        ..Default::default()
+    }
+}
+
+/// Rough token accounting so the agent host does not classify the turn as empty.
+fn usage_response(text: &str) -> pb::InferenceStreamResponse {
+    use pb::inference_stream_response::Response;
+
+    let completion = (text.chars().count() / 4).max(1) as i32;
+    pb::InferenceStreamResponse {
+        response: Some(Response::Usage(pb::InferenceUsageInfo {
+            prompt_tokens: 0,
+            completion_tokens: completion,
+            total_tokens: Some(completion),
+        })),
+        ..Default::default()
+    }
 }
 
 /// Keeps the bytes of an append that could not be decoded, so the next report of
@@ -186,41 +389,6 @@ pub fn report_rejection(request: &ai::BidiAppendRequest, error: &Error) {
         %error,
         "rejected a Cursor append that could not be decoded"
     );
-}
-
-/// Cursor's newer agent loop sends `aiserver.v1.InferenceService` frames instead
-/// of `agent.v1.AgentRunRequest`. This server does not implement that protocol
-/// yet; report it precisely instead of failing as a corrupt conversation state.
-fn reject_run_inference(request_id: &str, payload: &[u8], frame: inference::Frame) -> Error {
-    let described = match frame {
-        inference::Frame::RunRequest(request) => {
-            let text = inference::routing_text(&request);
-            format!(
-                "run_request {} routing_text_parts={}",
-                inference::describe(&request),
-                text.len()
-            )
-        }
-        inference::Frame::InvokeModel(_) => "invoke_model".to_string(),
-        inference::Frame::FinishRun(_) => "finish_run".to_string(),
-        inference::Frame::CancelInvocation(_) => "cancel_invocation".to_string(),
-        inference::Frame::Heartbeat => "heartbeat".to_string(),
-        inference::Frame::Other(kind) => kind.to_string(),
-    };
-    let dump = crate::config::managed_data_dir()
-        .ok()
-        .map(|directory| directory.join("rejected"))
-        .and_then(|directory| salvage::dump_rejected(&directory, request_id, payload));
-    tracing::warn!(
-        request_id,
-        frame = described,
-        dump = dump.as_ref().map(|path| path.display().to_string()),
-        "received a Cursor RunInference frame; the protocol is not implemented yet"
-    );
-    Error::Protocol(
-        "Cursor switched this run to aiserver RunInference, which cursor-byok does not support yet"
-            .into(),
-    )
 }
 
 fn request_id(request: &ai::BidiAppendRequest) -> Result<&str> {

@@ -5,7 +5,10 @@
 //! `ConversationStateStructure.file_states` / `.summary` / `.plan`).
 use cursor_server::{
     api::cursor::bidi,
-    cursor::protocol::proto::{agent::v1 as agent, aiserver::v1 as ai, inference::v1 as pb},
+    cursor::protocol::{
+        inference,
+        proto::{agent::v1 as agent, aiserver::v1 as ai, inference::v1 as pb},
+    },
 };
 use prost::Message;
 
@@ -57,19 +60,49 @@ fn run_inference_frame_fails_the_agent_decoder() {
 }
 
 #[test]
-fn run_inference_frame_is_reported_as_unsupported_protocol() {
-    let Err(error) = bidi::decode(&append(run_request_frame())) else {
-        panic!("the frame must be rejected until the protocol is implemented");
-    };
-    let message = error.to_string();
-    assert!(
-        message.contains("RunInference"),
-        "unexpected error: {message}"
-    );
-    assert!(
-        !message.contains("conversation_state"),
-        "the failure must not blame the conversation state: {message}"
-    );
+fn run_inference_frame_is_decoded_as_a_run_request() {
+    let decoded = bidi::decode(&append(run_request_frame()), false)
+        .expect("the frame must decode instead of failing as a corrupt state");
+    match decoded {
+        bidi::Decoded::Inference { request_id, frame } => {
+            assert_eq!(request_id, "run-inference-frame");
+            match frame {
+                inference::Frame::RunRequest(request) => {
+                    assert_eq!(request.conversation_id, CONVERSATION_ID);
+                    assert_eq!(
+                        inference::requested_model(&request).as_deref(),
+                        Some(MODEL_ID)
+                    );
+                }
+                other => panic!("expected a run_request frame, got {other:?}"),
+            }
+        }
+        _ => panic!("expected an inference frame"),
+    }
+}
+
+#[test]
+fn finish_run_is_accepted_once_the_run_uses_inference() {
+    let finish = pb::RunInferenceClientMessage {
+        message: Some(pb::run_inference_client_message::Message::FinishRun(
+            pb::RunInferenceFinishRun {
+                turn_completed: Some(true),
+                ..Default::default()
+            },
+        )),
+    }
+    .encode_to_vec();
+
+    // Without an established run it stays undecodable, so an agent.v1 append is
+    // never mistaken for it.
+    assert!(bidi::decode(&append(finish.clone()), false).is_err());
+
+    match bidi::decode(&append(finish), true).expect("an active run accepts finish_run") {
+        bidi::Decoded::Inference { frame, .. } => {
+            assert!(matches!(frame, inference::Frame::FinishRun(_)));
+        }
+        _ => panic!("expected an inference frame"),
+    }
 }
 
 #[test]
@@ -86,8 +119,9 @@ fn agent_frames_are_not_reclassified_as_inference() {
             },
         )),
     };
-    let decoded = bidi::decode(&append(frame.encode_to_vec()))
-        .expect("an agent.v1 conversation action must keep decoding");
+    let decoded = bidi::decode(&append(frame.encode_to_vec()), false)
+        .expect("an agent.v1 conversation action must keep decoding")
+        .into_agent();
     assert!(matches!(
         decoded.message.message,
         Some(agent::agent_client_message::Message::ConversationAction(_))
