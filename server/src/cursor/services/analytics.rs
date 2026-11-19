@@ -73,6 +73,20 @@ fn patch_upstream(response: proxy::BufferedResponse) -> Result<Response<Body>> {
 /// to stay disabled, so the client keeps using `agent.v1` frames.
 fn disable_run_inference(config: &mut Value) -> usize {
     let mut disabled = 0;
+    // Statsig keys are hashed (`hash_used` is djb2 or sha256), so the switch is
+    // looked up by hashed name; matching on the readable name finds nothing.
+    let hashed = statsig_key(config, RUN_INFERENCE_WEBSOCKET_CLIENT);
+    if let Some(entry) = config
+        .get_mut("dynamic_configs")
+        .and_then(Value::as_object_mut)
+        .and_then(|configs| configs.get_mut(&hashed))
+        .and_then(|entry| entry.get_mut("value"))
+        .and_then(Value::as_object_mut)
+    {
+        entry.insert("enabled".into(), Value::Bool(false));
+        entry.insert("treatment_percent".into(), Value::from(0));
+        disabled += 1;
+    }
     if let Some(gates) = config
         .get_mut("feature_gates")
         .and_then(Value::as_object_mut)
@@ -326,6 +340,43 @@ mod tests {
             json!(4),
             "unrelated settings have to survive"
         );
+    }
+
+    #[test]
+    fn run_inference_switch_is_disabled_through_its_hashed_key() {
+        // Captured from a live bootstrap: Statsig returns `hash_used: djb2`, so
+        // the dynamic config for `run_inference_websocket_client` is keyed by its
+        // djb2 hash and the readable name never appears in the payload.
+        let mut config = json!({
+            "feature_gates": {},
+            "dynamic_configs": {
+                "1747296477": {
+                    "name": "1747296477",
+                    "rule_id": "11jE3k7tDkr0eBAAFIeku7:100.00",
+                    "value": {
+                        "enabled": true,
+                        "fallbackOnColdPool": true,
+                        "maxConnections": 2,
+                        "treatment_percent": 100,
+                        "warmSpareOnLease": true
+                    }
+                }
+            },
+            "layer_configs": {},
+            "hash_used": "djb2"
+        });
+
+        assert_eq!(disable_run_inference(&mut config), 1);
+
+        let value = &config["dynamic_configs"]["1747296477"]["value"];
+        assert_eq!(value["enabled"], json!(false));
+        assert_eq!(value["treatment_percent"], json!(0));
+        assert_eq!(
+            value["maxConnections"],
+            json!(2),
+            "unrelated settings survive"
+        );
+        assert_eq!(value["warmSpareOnLease"], json!(true));
     }
 
     #[test]
