@@ -14,10 +14,24 @@ use tokio::sync::mpsc;
 use crate::{
     cursor::{
         protocol::{connect, proto::aiserver::v1 as ai},
-        transport::TransportRegistry,
+        transport::{InferenceHub, TransportRegistry},
     },
     Result,
 };
+
+/// Stops the provider calls of a request once the agent host closes the stream.
+struct StreamGuard {
+    hub: InferenceHub,
+    request_id: String,
+}
+
+impl Drop for StreamGuard {
+    fn drop(&mut self) {
+        let hub = self.hub.clone();
+        let request_id = self.request_id.clone();
+        tokio::spawn(async move { hub.cancel_request(&request_id).await });
+    }
+}
 
 pub async fn stream(
     State(registry): State<TransportRegistry>,
@@ -27,20 +41,24 @@ pub async fn stream(
         .await
         .map_err(|error| crate::Error::Protocol(format!("cannot read request body: {error}")))?;
     let request: ai::BidiRequestId = connect::decode_unary(&body)?;
-    let (queued, receiver) = registry.inference().subscribe(&request.request_id).await;
+    let hub = registry.inference();
+    let (queued, receiver) = hub.subscribe(&request.request_id).await;
     tracing::info!(
         request_id = request.request_id,
         queued = queued.len(),
         "agent host subscribed to RunInferenceSSE"
     );
-    Ok(frame_stream(queued, receiver))
+    Ok(frame_stream(hub, request.request_id, queued, receiver))
 }
 
 fn frame_stream(
+    hub: InferenceHub,
+    request_id: String,
     queued: Vec<Bytes>,
     mut receiver: mpsc::UnboundedReceiver<Bytes>,
 ) -> Response<Body> {
     let stream = async_stream::stream! {
+        let _guard = StreamGuard { hub, request_id };
         for frame in queued {
             yield Ok::<Bytes, Infallible>(frame);
         }

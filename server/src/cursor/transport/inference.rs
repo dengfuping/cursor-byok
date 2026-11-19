@@ -7,6 +7,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use bytes::Bytes;
 use tokio::sync::{mpsc, Mutex};
+use tokio_util::sync::CancellationToken;
 
 use crate::{
     cursor::protocol::{connect, proto::inference::v1 as pb},
@@ -23,6 +24,7 @@ struct Channel {
     queued: Vec<Bytes>,
     conversation_id: Option<String>,
     resolved_model: Option<String>,
+    cancellations: HashMap<String, CancellationToken>,
 }
 
 /// Routes `RunInferenceServerMessage` frames to the SSE stream of one request.
@@ -101,6 +103,49 @@ impl InferenceHub {
             .await
             .get(request_id)
             .and_then(|channel| channel.conversation_id.clone())
+    }
+
+    /// Registers the provider call of an invocation so a cancel can stop it.
+    pub async fn register_invocation(
+        &self,
+        request_id: &str,
+        invocation_id: &str,
+    ) -> CancellationToken {
+        let cancellation = CancellationToken::new();
+        let mut inner = self.inner.lock().await;
+        inner
+            .entry(request_id.to_owned())
+            .or_default()
+            .cancellations
+            .insert(invocation_id.to_owned(), cancellation.clone());
+        cancellation
+    }
+
+    /// Stops one invocation the agent host cancelled.
+    pub async fn cancel_invocation(&self, request_id: &str, invocation_id: &str) {
+        let token = self
+            .inner
+            .lock()
+            .await
+            .get(request_id)
+            .and_then(|channel| channel.cancellations.get(invocation_id).cloned());
+        if let Some(token) = token {
+            token.cancel();
+        }
+    }
+
+    /// Stops every invocation of a request, for example when the stream closes.
+    pub async fn cancel_request(&self, request_id: &str) {
+        let tokens = self
+            .inner
+            .lock()
+            .await
+            .get(request_id)
+            .map(|channel| channel.cancellations.values().cloned().collect::<Vec<_>>())
+            .unwrap_or_default();
+        for token in tokens {
+            token.cancel();
+        }
     }
 
     /// Whether this request already runs on the inference protocol.

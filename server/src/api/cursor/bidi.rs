@@ -297,11 +297,15 @@ pub async fn handle_inference(
             return Ok(());
         }
         inference::Frame::FinishRun(_) => tracing::info!(request_id, "run inference finish_run"),
-        inference::Frame::CancelInvocation(frame) => tracing::info!(
-            request_id,
-            invocation_id = frame.invocation_id,
-            "run inference cancel_invocation"
-        ),
+        inference::Frame::CancelInvocation(frame) => {
+            tracing::info!(
+                request_id,
+                invocation_id = frame.invocation_id,
+                "run inference cancel_invocation"
+            );
+            hub.cancel_invocation(request_id, &frame.invocation_id)
+                .await;
+        }
         inference::Frame::Heartbeat => {}
         inference::Frame::Other(kind) => tracing::debug!(request_id, frame = kind),
     }

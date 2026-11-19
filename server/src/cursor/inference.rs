@@ -7,7 +7,6 @@
 use std::sync::Arc;
 
 use futures_util::StreamExt;
-use tokio_util::sync::CancellationToken;
 
 use crate::{
     cursor::{protocol::proto::inference::v1 as pb, transport::InferenceHub},
@@ -87,6 +86,7 @@ pub async fn run(
 
     let request_id = invocation.request_id.as_str();
     let invocation_id = invocation.invocation_id.clone();
+    let cancellation = hub.register_invocation(request_id, &invocation_id).await;
     publish(
         &hub,
         request_id,
@@ -95,18 +95,20 @@ pub async fn run(
     )
     .await;
 
-    let mut stream = provider.stream(model_invocation, CancellationToken::new());
+    let mut stream = provider.stream(model_invocation, cancellation.clone());
     let mut completion_tokens = 0_i32;
     let mut prompt_tokens = 0_i32;
+    let mut text = String::new();
     while let Some(event) = stream.next().await {
         match event {
-            Ok(ModelEvent::TextDelta(text)) => {
-                completion_tokens += estimate_tokens(&text);
+            Ok(ModelEvent::TextDelta(delta)) => {
+                completion_tokens += estimate_tokens(&delta);
+                text.push_str(&delta);
                 publish(
                     &hub,
                     request_id,
                     &invocation_id,
-                    text_response(&text, false),
+                    text_response(&delta, false),
                 )
                 .await;
             }
@@ -132,7 +134,25 @@ pub async fn run(
         }
     }
 
+    // A cancelled invocation still ends cleanly: the agent host keeps the text it
+    // already received instead of discarding the turn as a transport failure.
+    if cancellation.is_cancelled() {
+        tracing::info!(
+            request_id,
+            invocation_id,
+            "run inference invocation cancelled"
+        );
+    }
     publish(&hub, request_id, &invocation_id, text_response("", true)).await;
+    // The agent host persists the assistant message from `response_info`; without
+    // it a turn that is stopped half way keeps nothing.
+    publish(
+        &hub,
+        request_id,
+        &invocation_id,
+        response_info_response(&invocation_id, &config.model_id, &text),
+    )
+    .await;
     publish(
         &hub,
         request_id,
@@ -284,6 +304,29 @@ fn thinking_response(text: &str) -> pb::InferenceStreamResponse {
     pb::InferenceStreamResponse {
         response: Some(Response::ThinkingPart(pb::InferenceThinkingStreamPart {
             text: text.into(),
+            ..Default::default()
+        })),
+        ..Default::default()
+    }
+}
+
+fn response_info_response(
+    invocation_id: &str,
+    model: &str,
+    text: &str,
+) -> pb::InferenceStreamResponse {
+    pb::InferenceStreamResponse {
+        response: Some(Response::ResponseInfo(pb::InferenceResponseInfo {
+            id: invocation_id.into(),
+            model: model.into(),
+            created_at: crate::store::now_ms(),
+            messages: vec![pb::InferenceResponseMessage {
+                id: format!("{invocation_id}-assistant"),
+                role: pb::InferenceMessageRole::Assistant as i32,
+                content: Some(text.into()),
+                assistant_part_order: vec![pb::InferenceAssistantPartKind::Text as i32],
+                ..Default::default()
+            }],
             ..Default::default()
         })),
         ..Default::default()
